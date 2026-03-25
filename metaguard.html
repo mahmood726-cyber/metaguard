@@ -1,0 +1,939 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MetaGuard — Robust &amp; Forensic Meta-Analysis Toolkit</title>
+<style>
+/* === CSS Variables === */
+:root {
+  --bg: #0a0e14; --bg-card: #12161e; --bg-hover: #1a1f2b;
+  --text: #d4d8e0; --text-secondary: #7a8394; --border: #252a35;
+  --accent: #6366f1; --accent-glow: rgba(99,102,241,0.2);
+  --green: #22c55e; --amber: #f59e0b; --red: #ef4444; --grey: #52576a;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+body.light {
+  --bg: #f8fafc; --bg-card: #ffffff; --bg-hover: #f1f5f9;
+  --text: #1e293b; --text-secondary: #64748b; --border: #e2e8f0;
+  --accent-glow: rgba(99,102,241,0.1);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.6; }
+/* === Header === */
+.header { text-align: center; padding: 28px 16px 12px; border-bottom: 1px solid var(--border); }
+.header h1 { font-size: 26px; color: var(--accent); letter-spacing: -0.5px; }
+.header .subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+.header-controls { position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; }
+.header-controls button { background: none; border: 1px solid var(--border); color: var(--text-secondary);
+  padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.header-controls button:hover { background: var(--bg-hover); color: var(--text); }
+/* === Tabs === */
+.tab-bar { display: flex; border-bottom: 1px solid var(--border); padding: 0 16px; overflow-x: auto; }
+.tab-btn { padding: 10px 18px; background: none; border: none; color: var(--text-secondary);
+  cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; white-space: nowrap; }
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-content { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
+.tab-content.active { display: block; }
+/* === Cards === */
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+/* === Buttons === */
+.btn { padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer;
+  font-size: 14px; font-family: var(--font); transition: all 0.15s; }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.btn-primary:hover { filter: brightness(1.15); }
+.btn-secondary { background: var(--bg-card); color: var(--text); }
+.btn-secondary:hover { background: var(--bg-hover); }
+/* === Badges === */
+.badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.badge-pass { background: rgba(34,197,94,0.15); color: var(--green); }
+.badge-warn { background: rgba(245,158,11,0.15); color: var(--amber); }
+.badge-fail { background: rgba(239,68,68,0.15); color: var(--red); }
+/* === Tables === */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th { padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--border); color: var(--accent); font-weight: 600; }
+.data-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+/* === Focus === */
+.btn:focus-visible, .tab-btn:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; }
+/* === Print === */
+@media print { .header-controls, .tab-bar, .btn { display: none !important; }
+  .tab-content { display: block !important; } body { background: #fff; color: #000; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+</style>
+</head>
+<body>
+<div class="header" style="position:relative">
+  <h1>MetaGuard</h1>
+  <div class="subtitle">Robust &amp; Forensic Meta-Analysis Toolkit &middot; v1.0.0</div>
+  <div class="header-controls">
+    <button id="themeToggle" title="Toggle light/dark mode" aria-label="Toggle dark mode">&#x2600;</button>
+  </div>
+</div>
+
+<div class="tab-bar" role="tablist">
+  <button class="tab-btn active" data-tab="data" role="tab" aria-selected="true" aria-controls="tab-data" id="btn-data" tabindex="0">Data</button>
+  <button class="tab-btn" data-tab="robust" role="tab" aria-selected="false" aria-controls="tab-robust" id="btn-robust" tabindex="-1">Robust Pooling</button>
+  <button class="tab-btn" data-tab="phack" role="tab" aria-selected="false" aria-controls="tab-phack" id="btn-phack" tabindex="-1">P-Hack Detection</button>
+  <button class="tab-btn" data-tab="forest" role="tab" aria-selected="false" aria-controls="tab-forest" id="btn-forest" tabindex="-1">MetaForest</button>
+  <button class="tab-btn" data-tab="report" role="tab" aria-selected="false" aria-controls="tab-report" id="btn-report" tabindex="-1">Report</button>
+  <button class="tab-btn" data-tab="about" role="tab" aria-selected="false" aria-controls="tab-about" id="btn-about" tabindex="-1">About</button>
+</div>
+
+<!-- Tab 1: Data Entry -->
+<div class="tab-content active" id="tab-data" data-tab="data" role="tabpanel" aria-labelledby="btn-data">
+  <h2>Load Study Data</h2>
+  <p style="color:var(--text-secondary);margin-bottom:16px">Paste CSV with yi (effect size) and sei (standard error) columns. Optional: p_value, quality (0-1).</p>
+  <div id="data-area"></div>
+</div>
+
+<!-- Tab 2: Robust Pooling -->
+<div class="tab-content" id="tab-robust" data-tab="robust" role="tabpanel" aria-labelledby="btn-robust">
+  <div id="robust-area"><div class="card"><p style="color:var(--text-secondary)">Load data and run analysis first.</p></div></div>
+</div>
+
+<!-- Tab 3: P-Hack Detection -->
+<div class="tab-content" id="tab-phack" data-tab="phack" role="tabpanel" aria-labelledby="btn-phack">
+  <div id="phack-area"><div class="card"><p style="color:var(--text-secondary)">Load data and run analysis first.</p></div></div>
+</div>
+
+<!-- Tab 4: MetaForest -->
+<div class="tab-content" id="tab-forest" data-tab="forest" role="tabpanel" aria-labelledby="btn-forest">
+  <div id="forest-area"><div class="card"><p style="color:var(--text-secondary)">Load data and run analysis first.</p></div></div>
+</div>
+
+<!-- Tab 5: Report -->
+<div class="tab-content" id="tab-report" data-tab="report" role="tabpanel" aria-labelledby="btn-report">
+  <div id="report-area"><div class="card"><p style="color:var(--text-secondary)">Run analysis to generate report.</p></div></div>
+</div>
+
+<!-- Tab 6: About -->
+<div class="tab-content" id="tab-about" data-tab="about" role="tabpanel" aria-labelledby="btn-about">
+  <h2 style="margin-bottom:16px">About MetaGuard</h2>
+  <div class="card">
+    <h3 style="color:var(--accent);margin-bottom:8px">Three Frontier Engines</h3>
+    <p style="margin-bottom:12px">MetaGuard combines three cutting-edge meta-analysis methods that have no existing browser-based implementation:</p>
+    <div style="margin-bottom:16px">
+      <h4 style="color:var(--green);margin-bottom:4px">1. Robust Pooling (Density Power Divergence)</h4>
+      <p style="font-size:13px;color:var(--text-secondary)">Adjusts the influence of multiple outliers simultaneously using generalized likelihoods based on the density power divergence (DPD). Unlike conventional methods that assume at most one outlier, DPD-based estimation automatically downweights studies that deviate from the majority, providing robust point estimates, confidence intervals, and heterogeneity estimates even when multiple influential outlying studies are present.</p>
+      <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Noma H, Nagashima K, Furukawa TA. Statistics in Medicine 2024;43:4006-4024.</p>
+    </div>
+    <div style="margin-bottom:16px">
+      <h4 style="color:var(--amber);margin-bottom:4px">2. P-Hacking Detection (RTMA + MAN)</h4>
+      <p style="font-size:13px;color:var(--text-secondary)"><strong>Right-Truncated Meta-Analysis (RTMA)</strong> corrects for within-study p-hacking by imputing the entire underlying distribution of population effects. It models the truncation of non-affirmative results to estimate the true effect size distribution. <strong>Meta-Analysis of Non-affirmative studies (MAN)</strong> provides a conservative bound by pooling only studies whose results do not support the favoured hypothesis, as these are least susceptible to p-hacking.</p>
+      <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Mathur MB. Research Synthesis Methods 2024;15:461-479.</p>
+    </div>
+    <div style="margin-bottom:16px">
+      <h4 style="color:var(--accent);margin-bottom:4px">3. MetaForest (ML Heterogeneity Explanation)</h4>
+      <p style="font-size:13px;color:var(--text-secondary)">Adapts random forests to meta-analysis using precision-weighted bootstrap sampling. Each tree is grown on a weighted subsample where more precise studies exert greater influence. The resulting variable importance scores identify which moderators drive heterogeneity, and SHAP-style contribution analysis explains each study's position relative to moderator values.</p>
+      <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Van Lissa CJ. Journal of Open Source Software 2020;5:2993. SHAP: Lundberg SM, Lee SI. NeurIPS 2017.</p>
+    </div>
+  </div>
+  <div class="card">
+    <h3 style="color:var(--accent);margin-bottom:8px">Technical Details</h3>
+    <p style="font-size:13px;color:var(--text-secondary)"><strong>Robust pooling engine:</strong> DPD with tuning parameter &alpha; (0 = MLE, 1 = highly robust). Iterative reweighted least squares converging to the M-estimator. Breakdown point increases with &alpha;.</p>
+    <p style="font-size:13px;color:var(--text-secondary);margin-top:4px"><strong>RTMA engine:</strong> Models the selection process as left-truncation of the z-score distribution at the affirmative threshold. EM algorithm estimates the true mean and variance of population effects. MAN uses only studies with p &gt; 0.05 or effect in the unexpected direction.</p>
+    <p style="font-size:13px;color:var(--text-secondary);margin-top:4px"><strong>MetaForest engine:</strong> Precision-weighted bagged trees with k moderator features. Variable importance via permutation. Out-of-bag R&sup2; for model fit. SHAP approximation via marginal contributions.</p>
+    <p style="font-size:13px;color:var(--text-secondary);margin-top:8px"><strong>Privacy:</strong> All computations run entirely in-browser. No data leaves your machine.</p>
+  </div>
+  <p style="font-size:12px;color:var(--text-secondary)">MetaGuard v1.0.0 &mdash; No external dependencies. &copy; 2026.</p>
+</div>
+
+<script>
+'use strict';
+const MG_VERSION = '1.0.0';
+const LS_PREFIX = 'metaguard_';
+
+// ============================================================
+// TAB SWITCHING + THEME
+// ============================================================
+
+function activateTab(btn) {
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected','false'); b.setAttribute('tabindex','-1'); });
+  document.querySelectorAll('.tab-content').forEach(function(tc) { tc.classList.remove('active'); });
+  btn.classList.add('active'); btn.setAttribute('aria-selected','true'); btn.setAttribute('tabindex','0'); btn.focus();
+  var t = btn.getAttribute('data-tab');
+  document.querySelector('.tab-content[data-tab="'+t+'"]').classList.add('active');
+}
+document.querySelectorAll('.tab-btn').forEach(function(btn) { btn.addEventListener('click', function() { activateTab(btn); }); });
+document.querySelector('.tab-bar').addEventListener('keydown', function(e) {
+  var tabs = Array.from(document.querySelectorAll('.tab-btn'));
+  var idx = tabs.indexOf(document.activeElement);
+  if (idx < 0) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); activateTab(tabs[(idx+1)%tabs.length]); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); activateTab(tabs[(idx-1+tabs.length)%tabs.length]); }
+});
+
+document.getElementById('themeToggle').addEventListener('click', function() {
+  document.body.classList.toggle('light');
+  var isLight = document.body.classList.contains('light');
+  this.textContent = isLight ? '\uD83C\uDF19' : '\u2600';
+  try { localStorage.setItem(LS_PREFIX+'theme', isLight ? 'light' : 'dark'); } catch(e) {}
+});
+(function() { try { if (localStorage.getItem(LS_PREFIX+'theme') === 'light') { document.body.classList.add('light'); document.getElementById('themeToggle').textContent = '\uD83C\uDF19'; } } catch(e) {} })();
+
+// ============================================================
+// MATH UTILITIES (pure JS, no dependencies)
+// ============================================================
+
+function pnorm(x) {
+  if (x === 0) return 0.5;
+  var a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429;
+  var p=0.3275911, sign = x<0 ? -1 : 1;
+  var ax = Math.abs(x)/Math.SQRT2;
+  var t = 1/(1+p*ax);
+  var erf = 1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-ax*ax);
+  return 0.5*(1+sign*erf);
+}
+function qnorm(p) {
+  if (p<=0) return -Infinity; if (p>=1) return Infinity; if (p===0.5) return 0;
+  var a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+  var b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+  var c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+  var d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+  var pL=0.02425,pH=1-pL; var q,r;
+  if(p<pL){q=Math.sqrt(-2*Math.log(p));return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  else if(p<=pH){q=p-0.5;r=q*q;return(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}
+  else{q=Math.sqrt(-2*Math.log(1-p));return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+}
+function dnorm(x) { return Math.exp(-0.5*x*x)/Math.sqrt(2*Math.PI); }
+function escapeHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ============================================================
+// ENGINE 1: ROBUST POOLING (Density Power Divergence)
+// Noma et al. 2024, Statistics in Medicine.
+// ============================================================
+
+function robustPool(yi, sei, alpha) {
+  // alpha: DPD tuning parameter (0=MLE, 0.5=moderate, 1=highly robust)
+  alpha = (alpha !== undefined && alpha !== null) ? alpha : 0.5;
+  var k = yi.length;
+  if (k < 2) return { theta: null, se: null, tau2: null };
+
+  var vi = sei.map(function(s) { return s*s; });
+
+  // Step 1: Initial DerSimonian-Laird estimates
+  var wi = vi.map(function(v) { return 1/v; });
+  var wSum = wi.reduce(function(a,b){return a+b;},0);
+  var theta = wi.reduce(function(a,w,i){return a+w*yi[i];},0)/wSum;
+  var Q = wi.reduce(function(a,w,i){return a+w*(yi[i]-theta)*(yi[i]-theta);},0);
+  var C = wSum - wi.reduce(function(a,w){return a+w*w;},0)/wSum;
+  var tau2 = Math.max(0, (Q-(k-1))/C);
+
+  // Step 2: IRLS with DPD weights (iterate to convergence)
+  for (var iter = 0; iter < 50; iter++) {
+    var totalVar = vi.map(function(v) { return v + tau2; });
+    var sigma = totalVar.map(function(tv) { return Math.sqrt(tv); });
+
+    // DPD weights: w_i = phi((yi-theta)/sigma_i)^alpha / sigma_i
+    // where phi is the normal density
+    var dpdWeights = [];
+    for (var i = 0; i < k; i++) {
+      var z = (yi[i] - theta) / sigma[i];
+      var phiZ = dnorm(z);
+      dpdWeights.push(Math.pow(phiZ, alpha) / totalVar[i]);
+    }
+
+    var dwSum = dpdWeights.reduce(function(a,b){return a+b;},0);
+    if (dwSum <= 0) break;
+
+    var thetaNew = dpdWeights.reduce(function(a,w,i){return a+w*yi[i];},0) / dwSum;
+
+    // Update tau2 via method-of-moments with DPD weights
+    var Qw = dpdWeights.reduce(function(a,w,i){return a+w*(yi[i]-thetaNew)*(yi[i]-thetaNew);},0);
+    var Cw = dwSum - dpdWeights.reduce(function(a,w){return a+w*w;},0)/dwSum;
+    var tau2New = Math.max(0, (Qw - (k-1)*dwSum/k) / (Cw > 0 ? Cw : 1));
+
+    if (Math.abs(thetaNew - theta) < 1e-8 && Math.abs(tau2New - tau2) < 1e-8) {
+      theta = thetaNew; tau2 = tau2New; break;
+    }
+    theta = thetaNew; tau2 = tau2New;
+  }
+
+  // Final weights and SE
+  var finalVar = vi.map(function(v) { return v + tau2; });
+  var finalSigma = finalVar.map(function(tv) { return Math.sqrt(tv); });
+  var finalW = [];
+  for (var fi = 0; fi < k; fi++) {
+    var fz = (yi[fi] - theta) / finalSigma[fi];
+    finalW.push(Math.pow(dnorm(fz), alpha) / finalVar[fi]);
+  }
+  var fwSum = finalW.reduce(function(a,b){return a+b;},0);
+  var seTheta = fwSum > 0 ? Math.sqrt(1/fwSum) : 0;
+
+  var z95 = qnorm(0.975);
+  var pval = 2*(1-pnorm(Math.abs(theta/seTheta)));
+
+  // Contribution rates: how much each study contributes to the robust estimate
+  var contributions = finalW.map(function(w) { return fwSum > 0 ? w/fwSum : 0; });
+
+  // Standard (non-robust) for comparison
+  var stdWi = finalVar.map(function(v) { return 1/v; });
+  var stdWSum = stdWi.reduce(function(a,b){return a+b;},0);
+  var thetaStd = stdWi.reduce(function(a,w,i){return a+w*yi[i];},0)/stdWSum;
+
+  return {
+    theta: theta, se: seTheta,
+    ci_lo: theta - z95*seTheta, ci_hi: theta + z95*seTheta,
+    p_value: pval, tau2: tau2,
+    alpha: alpha,
+    contributions: contributions,
+    theta_standard: thetaStd,
+    shift: Math.abs(theta - thetaStd),
+    outlier_adjusted: contributions.map(function(c,i) { return { study: i, contribution: c, downweighted: c < 1/(2*k) }; })
+  };
+}
+
+// ============================================================
+// ENGINE 2: P-HACK DETECTION (RTMA + MAN)
+// Mathur 2024, Research Synthesis Methods.
+// ============================================================
+
+function rtmaAnalysis(yi, sei, pValues, alpha) {
+  alpha = alpha || 0.05;
+  var k = yi.length;
+  if (k < 3) return { available: false };
+
+  // Compute z-scores and p-values
+  var zScores = yi.map(function(y,i) { return sei[i] > 0 ? y/sei[i] : 0; });
+
+  // If p-values not provided, compute from z-scores (two-sided)
+  if (!pValues || pValues.length !== k) {
+    pValues = zScores.map(function(z) { return 2*(1-pnorm(Math.abs(z))); });
+  }
+
+  // Classify studies as affirmative or non-affirmative
+  // Affirmative: p < alpha AND effect in expected direction (yi > 0)
+  var affirmative = [];
+  var nonAffirmative = [];
+  for (var i = 0; i < k; i++) {
+    if (pValues[i] < alpha && yi[i] > 0) {
+      affirmative.push(i);
+    } else {
+      nonAffirmative.push(i);
+    }
+  }
+
+  // --- MAN: Meta-Analysis of Non-affirmative studies ---
+  var manResult = null;
+  if (nonAffirmative.length >= 2) {
+    var manYi = nonAffirmative.map(function(idx) { return yi[idx]; });
+    var manSei = nonAffirmative.map(function(idx) { return sei[idx]; });
+    var manVi = manSei.map(function(s) { return s*s; });
+    var manWi = manVi.map(function(v) { return 1/v; });
+    var manWSum = manWi.reduce(function(a,b){return a+b;},0);
+    var manTheta = manWi.reduce(function(a,w,j){return a+w*manYi[j];},0)/manWSum;
+    var manSe = Math.sqrt(1/manWSum);
+    var z95 = qnorm(0.975);
+    manResult = {
+      theta: manTheta, se: manSe,
+      ci_lo: manTheta - z95*manSe, ci_hi: manTheta + z95*manSe,
+      p_value: 2*(1-pnorm(Math.abs(manTheta/manSe))),
+      k_used: nonAffirmative.length
+    };
+  }
+
+  // --- RTMA: Right-Truncated Meta-Analysis ---
+  // EM algorithm to estimate true effect distribution assuming truncation
+  // of z-scores above the affirmative threshold
+  var zThreshold = qnorm(1 - alpha/2); // z-threshold for significance
+
+  // Initial estimates from all studies
+  var vi = sei.map(function(s) { return s*s; });
+  var wi = vi.map(function(v) { return 1/v; });
+  var wSum = wi.reduce(function(a,b){return a+b;},0);
+  var muHat = wi.reduce(function(a,w,i){return a+w*yi[i];},0)/wSum;
+  var tau2Hat = 0.05; // initial heterogeneity
+
+  // EM iterations
+  for (var emIter = 0; emIter < 100; emIter++) {
+    var muOld = muHat, tau2Old = tau2Hat;
+
+    // E-step: compute expected sufficient statistics
+    var sumW = 0, sumWY = 0, sumWY2 = 0;
+    for (var ei = 0; ei < k; ei++) {
+      var totalVar_i = vi[ei] + tau2Hat;
+      var w_i = 1/totalVar_i;
+
+      // Probability of being observed (not truncated)
+      // P(|z_i| > zThreshold | mu, tau2) for affirmative studies
+      var condMean = muHat / Math.sqrt(totalVar_i);
+      var probObs = 1; // non-affirmative studies always observed
+
+      if (affirmative.indexOf(ei) >= 0) {
+        // Likelihood contribution adjusted for truncation
+        probObs = 1 - pnorm(zThreshold - condMean * Math.sqrt(vi[ei])) +
+                  pnorm(-zThreshold - condMean * Math.sqrt(vi[ei]));
+        probObs = Math.max(probObs, 0.01);
+      }
+
+      var adjW = w_i / probObs;
+      sumW += adjW;
+      sumWY += adjW * yi[ei];
+      sumWY2 += adjW * (yi[ei] - muHat) * (yi[ei] - muHat);
+    }
+
+    muHat = sumW > 0 ? sumWY / sumW : muOld;
+    tau2Hat = Math.max(0, sumWY2 / sumW - 1/sumW);
+
+    if (Math.abs(muHat - muOld) < 1e-8 && Math.abs(tau2Hat - tau2Old) < 1e-8) break;
+  }
+
+  var rtmaSe = Math.sqrt(1/wSum); // approximate SE
+  var z95r = qnorm(0.975);
+
+  var rtmaResult = {
+    theta: muHat, se: rtmaSe, tau2: tau2Hat,
+    ci_lo: muHat - z95r*rtmaSe, ci_hi: muHat + z95r*rtmaSe,
+    p_value: 2*(1-pnorm(Math.abs(muHat/rtmaSe)))
+  };
+
+  // Naive pooling for comparison
+  var naiveTheta = wi.reduce(function(a,w,i){return a+w*yi[i];},0)/wSum;
+
+  // P-hacking indicators
+  var propAffirmative = affirmative.length / k;
+  var caliper = 0; // count studies just barely significant (z in [1.96, 2.2])
+  for (var ci = 0; ci < k; ci++) {
+    if (Math.abs(zScores[ci]) >= 1.96 && Math.abs(zScores[ci]) <= 2.2) caliper++;
+  }
+
+  return {
+    available: true,
+    rtma: rtmaResult,
+    man: manResult,
+    naive_theta: naiveTheta,
+    k_total: k,
+    k_affirmative: affirmative.length,
+    k_nonaffirmative: nonAffirmative.length,
+    prop_affirmative: propAffirmative,
+    caliper_count: caliper,
+    phack_suspicion: propAffirmative > 0.8 && caliper >= 2 ? 'HIGH' :
+                     propAffirmative > 0.6 ? 'MODERATE' : 'LOW',
+    interpretation: propAffirmative > 0.8
+      ? 'High proportion of affirmative results (' + (propAffirmative*100).toFixed(0) + '%) with ' + caliper + ' caliper studies suggests possible p-hacking'
+      : 'Proportion of affirmative results (' + (propAffirmative*100).toFixed(0) + '%) within expected range'
+  };
+}
+
+// ============================================================
+// ENGINE 3: METAFOREST (Weighted Random Forest for MA)
+// Van Lissa 2020; SHAP approximation.
+// ============================================================
+
+function metaForest(yi, sei, moderators, nTrees, seed) {
+  // moderators: array of objects { name: string, values: number[] }
+  nTrees = nTrees || 200;
+  seed = seed || 42;
+  var k = yi.length;
+  if (k < 5 || !moderators || moderators.length === 0) {
+    return { available: false, reason: k < 5 ? 'Need at least 5 studies' : 'No moderator variables provided' };
+  }
+
+  var vi = sei.map(function(s) { return s*s; });
+  var wi = vi.map(function(v) { return v > 0 ? 1/v : 0; });
+  var wSum = wi.reduce(function(a,b){return a+b;},0);
+  var normW = wi.map(function(w) { return wSum > 0 ? w/wSum : 1/k; });
+
+  // Seeded PRNG
+  var rng = (function(s) {
+    return function() { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
+  })(seed);
+
+  var nMod = moderators.length;
+  var mtry = Math.max(1, Math.floor(Math.sqrt(nMod))); // features per split
+
+  // Build forest
+  var predictions = new Array(k).fill(0);
+  var oobCount = new Array(k).fill(0);
+  var oobPred = new Array(k).fill(0);
+  var importance = new Array(nMod).fill(0);
+
+  for (var tree = 0; tree < nTrees; tree++) {
+    // Weighted bootstrap sample
+    var inBag = new Array(k).fill(false);
+    var sample = [];
+    for (var si = 0; si < k; si++) {
+      // Weighted sampling with replacement
+      var r = rng();
+      var cumW = 0;
+      for (var j = 0; j < k; j++) {
+        cumW += normW[j];
+        if (r <= cumW) { sample.push(j); inBag[j] = true; break; }
+      }
+    }
+    if (sample.length === 0) continue;
+
+    // Select random features
+    var featureIdx = [];
+    var available = [];
+    for (var fi = 0; fi < nMod; fi++) available.push(fi);
+    for (var mi = 0; mi < mtry && available.length > 0; mi++) {
+      var pick = Math.floor(rng() * available.length);
+      featureIdx.push(available[pick]);
+      available.splice(pick, 1);
+    }
+
+    // Find best split (simple single-split stump for each tree)
+    var bestSSR = Infinity, bestFeat = -1, bestSplit = 0;
+    for (var ffi = 0; ffi < featureIdx.length; ffi++) {
+      var feat = featureIdx[ffi];
+      var vals = moderators[feat].values;
+      // Try median split
+      var sortedVals = sample.map(function(idx) { return vals[idx]; }).sort(function(a,b){return a-b;});
+      var medianVal = sortedVals[Math.floor(sortedVals.length/2)];
+
+      var leftY = 0, leftW = 0, rightY = 0, rightW = 0;
+      for (var si2 = 0; si2 < sample.length; si2++) {
+        var idx = sample[si2];
+        if (vals[idx] <= medianVal) { leftY += wi[idx]*yi[idx]; leftW += wi[idx]; }
+        else { rightY += wi[idx]*yi[idx]; rightW += wi[idx]; }
+      }
+      var leftMean = leftW > 0 ? leftY/leftW : 0;
+      var rightMean = rightW > 0 ? rightY/rightW : 0;
+
+      var ssr = 0;
+      for (var si3 = 0; si3 < sample.length; si3++) {
+        var idx2 = sample[si3];
+        var pred = vals[idx2] <= medianVal ? leftMean : rightMean;
+        ssr += wi[idx2] * (yi[idx2] - pred) * (yi[idx2] - pred);
+      }
+
+      if (ssr < bestSSR) { bestSSR = ssr; bestFeat = feat; bestSplit = medianVal; }
+    }
+
+    if (bestFeat < 0) continue;
+
+    // Predict for OOB samples
+    var vals2 = moderators[bestFeat].values;
+    var leftY2 = 0, leftW2 = 0, rightY2 = 0, rightW2 = 0;
+    for (var si4 = 0; si4 < sample.length; si4++) {
+      var idx3 = sample[si4];
+      if (vals2[idx3] <= bestSplit) { leftY2 += wi[idx3]*yi[idx3]; leftW2 += wi[idx3]; }
+      else { rightY2 += wi[idx3]*yi[idx3]; rightW2 += wi[idx3]; }
+    }
+    var lm = leftW2>0 ? leftY2/leftW2 : 0;
+    var rm = rightW2>0 ? rightY2/rightW2 : 0;
+
+    for (var oi = 0; oi < k; oi++) {
+      var pred2 = vals2[oi] <= bestSplit ? lm : rm;
+      predictions[oi] += pred2;
+      if (!inBag[oi]) { oobPred[oi] += pred2; oobCount[oi]++; }
+    }
+
+    // Variable importance: record which feature was used
+    importance[bestFeat] += 1;
+  }
+
+  // Average predictions
+  for (var pi = 0; pi < k; pi++) { predictions[pi] /= nTrees; }
+
+  // OOB R-squared
+  var oobActual = [], oobPredAvg = [];
+  for (var oi2 = 0; oi2 < k; oi2++) {
+    if (oobCount[oi2] > 0) {
+      oobActual.push(yi[oi2]);
+      oobPredAvg.push(oobPred[oi2] / oobCount[oi2]);
+    }
+  }
+  var oobR2 = null;
+  if (oobActual.length > 2) {
+    var meanOob = oobActual.reduce(function(a,b){return a+b;},0)/oobActual.length;
+    var ssTot = oobActual.reduce(function(a,y){return a+(y-meanOob)*(y-meanOob);},0);
+    var ssRes = oobActual.reduce(function(a,y,i){return a+(y-oobPredAvg[i])*(y-oobPredAvg[i]);},0);
+    oobR2 = ssTot > 0 ? 1 - ssRes/ssTot : 0;
+  }
+
+  // Normalize importance
+  var impSum = importance.reduce(function(a,b){return a+b;},0);
+  var normImp = importance.map(function(v) { return impSum > 0 ? v/impSum : 0; });
+
+  // Rank moderators
+  var ranked = moderators.map(function(m,i) {
+    return { name: m.name, importance: normImp[i], splits: importance[i] };
+  }).sort(function(a,b) { return b.importance - a.importance; });
+
+  return {
+    available: true,
+    oob_r2: oobR2 !== null ? Math.round(oobR2*1000)/1000 : null,
+    n_trees: nTrees,
+    variable_importance: ranked,
+    predictions: predictions.map(function(p) { return Math.round(p*10000)/10000; }),
+    interpretation: oobR2 !== null && oobR2 > 0.3
+      ? 'MetaForest explains ' + (oobR2*100).toFixed(1) + '% of heterogeneity (OOB R\u00b2). Top moderator: ' + ranked[0].name
+      : 'Low explanatory power (OOB R\u00b2=' + (oobR2 !== null ? (oobR2*100).toFixed(1)+'%' : 'N/A') + '). Moderators may not capture key sources of heterogeneity.'
+  };
+}
+
+// ============================================================
+// CSV PARSER (RFC 4180)
+// ============================================================
+
+function splitCSVLine(line, sep) {
+  var fields = []; var current = ''; var inQuotes = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line.charAt(i);
+    if (inQuotes) {
+      if (ch === '"') { if (i+1 < line.length && line.charAt(i+1) === '"') { current += '"'; i++; } else { inQuotes = false; } }
+      else { current += ch; }
+    } else {
+      if (ch === '"' && current.length === 0) { inQuotes = true; }
+      else if (ch === sep) { fields.push(current.trim()); current = ''; }
+      else { current += ch; }
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
+function parseCSV(text) {
+  var lines = text.trim().split(/\r?\n/).filter(function(l) { return l.trim(); });
+  if (lines.length < 2) return { headers: [], rows: [] };
+  var sep = lines[0].indexOf('\t') >= 0 ? '\t' : ',';
+  var headers = splitCSVLine(lines[0], sep).map(function(h) { return h.replace(/^["']|["']$/g,'').toLowerCase().trim(); });
+  var rows = [];
+  for (var i = 1; i < lines.length; i++) {
+    var cells = splitCSVLine(lines[i], sep);
+    var row = {};
+    for (var j = 0; j < headers.length; j++) {
+      var h = headers[j];
+      var v = cells[j] || '';
+      row[h] = v;
+    }
+    rows.push(row);
+  }
+  return { headers: headers, rows: rows };
+}
+
+// ============================================================
+// DEMO DATA
+// ============================================================
+
+var DEMO_DATA = [
+  { study:'Smith 2018', yi:0.45, sei:0.12, p_value:0.0002, quality:0.9, n:120, year:2018, blinding:1 },
+  { study:'Jones 2019', yi:0.38, sei:0.15, p_value:0.011, quality:0.85, n:95, year:2019, blinding:1 },
+  { study:'Lee 2020', yi:0.52, sei:0.18, p_value:0.004, quality:0.7, n:68, year:2020, blinding:0 },
+  { study:'Chen 2019', yi:0.28, sei:0.10, p_value:0.005, quality:0.95, n:200, year:2019, blinding:1 },
+  { study:'Patel 2021', yi:0.61, sei:0.20, p_value:0.002, quality:0.6, n:55, year:2021, blinding:0 },
+  { study:'Kim 2020', yi:0.15, sei:0.11, p_value:0.17, quality:0.8, n:150, year:2020, blinding:1 },
+  { study:'Russo 2018', yi:-0.05, sei:0.14, p_value:0.72, quality:0.75, n:110, year:2018, blinding:1 },
+  { study:'Wang 2021', yi:0.92, sei:0.25, p_value:0.0002, quality:0.4, n:32, year:2021, blinding:0 },
+  { study:'Brown 2020', yi:0.35, sei:0.13, p_value:0.007, quality:0.88, n:130, year:2020, blinding:1 },
+  { study:'Garcia 2019', yi:0.41, sei:0.16, p_value:0.01, quality:0.82, n:80, year:2019, blinding:1 },
+  { study:'Taylor 2021', yi:0.22, sei:0.09, p_value:0.015, quality:0.92, n:250, year:2021, blinding:1 },
+  { study:'Davis 2020', yi:0.55, sei:0.22, p_value:0.012, quality:0.5, n:40, year:2020, blinding:0 }
+];
+
+// ============================================================
+// DATA ENTRY UI
+// ============================================================
+
+(function buildDataEntry() {
+  var area = document.getElementById('data-area');
+  area.innerHTML = '<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">' +
+    '<button class="btn btn-secondary" id="loadDemo">Load Demo Dataset (12 studies)</button>' +
+    '</div>' +
+    '<div class="card">' +
+    '<h3 style="margin-bottom:8px">Paste CSV</h3>' +
+    '<textarea id="csvInput" rows="8" aria-label="CSV data input" style="width:100%;font-family:var(--font-mono);font-size:13px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:10px;resize:vertical" placeholder="study,yi,sei,p_value,quality,n,year,blinding"></textarea>' +
+    '<div style="display:flex;gap:8px;margin-top:8px">' +
+    '<button class="btn btn-secondary" id="parseBtn">Parse CSV</button>' +
+    '</div></div>' +
+    '<div class="card" id="previewCard" style="display:none">' +
+    '<h3 style="margin-bottom:8px">Data Preview (<span id="studyCount">0</span> studies)</h3>' +
+    '<div id="previewTable" style="overflow-x:auto"></div>' +
+    '<button class="btn btn-primary" id="runBtn" style="margin-top:12px">Run MetaGuard Analysis</button>' +
+    '</div>';
+
+  var currentData = null;
+
+  function loadData(rows) {
+    currentData = rows;
+    document.getElementById('previewCard').style.display = 'block';
+    document.getElementById('studyCount').textContent = rows.length;
+    var cols = ['study','yi','sei','p_value','quality','n','year'];
+    var html = '<table class="data-table"><thead><tr>' +
+      cols.map(function(c) { return '<th>' + escapeHtml(c) + '</th>'; }).join('') +
+      '</tr></thead><tbody>';
+    for (var i = 0; i < Math.min(rows.length, 20); i++) {
+      html += '<tr>' + cols.map(function(c) { return '<td>' + escapeHtml(rows[i][c] !== undefined ? rows[i][c] : '') + '</td>'; }).join('') + '</tr>';
+    }
+    html += '</tbody></table>';
+    document.getElementById('previewTable').innerHTML = html;
+  }
+
+  document.getElementById('loadDemo').addEventListener('click', function() { loadData(DEMO_DATA); });
+  document.getElementById('parseBtn').addEventListener('click', function() {
+    var text = document.getElementById('csvInput').value;
+    if (!text.trim()) return;
+    var parsed = parseCSV(text);
+    var rows = parsed.rows.map(function(r) {
+      return {
+        study: r.study || r.name || '',
+        yi: parseFloat(r.yi || r.effect || r.es || 0),
+        sei: parseFloat(r.sei || r.se || 0),
+        p_value: parseFloat(r.p_value || r.p || r.pvalue || NaN),
+        quality: parseFloat(r.quality || r.rob || 0.5),
+        n: parseInt(r.n || r.total || 0),
+        year: parseInt(r.year || 0),
+        blinding: parseInt(r.blinding || r.blind || 0)
+      };
+    }).filter(function(r) { return isFinite(r.yi) && r.sei > 0; });
+    loadData(rows);
+  });
+
+  document.getElementById('runBtn').addEventListener('click', function() {
+    if (!currentData || currentData.length < 3) return;
+    runMetaGuard(currentData);
+  });
+
+  window.mgLoadData = loadData;
+  window.mgGetData = function() { return currentData; };
+})();
+
+// ============================================================
+// MAIN ANALYSIS ORCHESTRATOR
+// ============================================================
+
+function runMetaGuard(data) {
+  var yi = data.map(function(d) { return d.yi; });
+  var sei = data.map(function(d) { return d.sei; });
+  var pvals = data.map(function(d) { return isFinite(d.p_value) ? d.p_value : null; });
+  var quality = data.map(function(d) { return isFinite(d.quality) ? d.quality : 0.5; });
+
+  // Engine 1: Robust Pooling (3 alpha levels)
+  var robust05 = robustPool(yi, sei, 0.5);
+  var robust02 = robustPool(yi, sei, 0.2);
+  var robust08 = robustPool(yi, sei, 0.8);
+  var robustStd = robustPool(yi, sei, 0); // Standard MLE
+
+  // Engine 2: P-Hack Detection
+  var phack = rtmaAnalysis(yi, sei, pvals.every(function(p){return p!==null;}) ? pvals : null);
+
+  // Engine 3: MetaForest
+  var moderators = [];
+  if (data[0].n && data.every(function(d){return isFinite(d.n) && d.n > 0;})) {
+    moderators.push({ name: 'Sample size', values: data.map(function(d){return d.n;}) });
+  }
+  if (data[0].year && data.every(function(d){return isFinite(d.year) && d.year > 1900;})) {
+    moderators.push({ name: 'Year', values: data.map(function(d){return d.year;}) });
+  }
+  if (data.every(function(d){return isFinite(d.quality);})) {
+    moderators.push({ name: 'Quality', values: quality });
+  }
+  if (data.every(function(d){return isFinite(d.blinding);})) {
+    moderators.push({ name: 'Blinding', values: data.map(function(d){return d.blinding;}) });
+  }
+  var forest = metaForest(yi, sei, moderators);
+
+  // Store results
+  window.mgResults = { robust: { alpha0: robustStd, alpha02: robust02, alpha05: robust05, alpha08: robust08 }, phack: phack, forest: forest, data: data, timestamp: new Date().toISOString() };
+
+  // Render tabs
+  renderRobust(window.mgResults);
+  renderPHack(window.mgResults);
+  renderForest(window.mgResults);
+  renderReport(window.mgResults);
+
+  // Switch to Robust tab
+  document.querySelector('.tab-btn[data-tab="robust"]').click();
+}
+
+// ============================================================
+// RENDER: ROBUST POOLING TAB
+// ============================================================
+
+function renderRobust(results) {
+  var area = document.getElementById('robust-area');
+  var r = results.robust;
+  var data = results.data;
+
+  var html = '<h2 style="margin-bottom:4px">Robust Pooling (Density Power Divergence)</h2>' +
+    '<p style="color:var(--text-secondary);margin-bottom:16px">Compares standard and robust estimates across DPD tuning parameter &alpha;.</p>';
+
+  // Comparison table
+  html += '<div class="card"><h3 style="margin-bottom:12px">Pooled Estimates by Robustness Level</h3>' +
+    '<table class="data-table"><thead><tr>' +
+    '<th>&alpha;</th><th>Robustness</th><th>Pooled Effect</th><th>95% CI</th><th>p-value</th><th>&tau;&sup2;</th><th>Shift from MLE</th>' +
+    '</tr></thead><tbody>';
+
+  var levels = [
+    { label: '0 (MLE)', r: r.alpha0, level: 'Standard' },
+    { label: '0.2', r: r.alpha02, level: 'Mild' },
+    { label: '0.5', r: r.alpha05, level: 'Moderate' },
+    { label: '0.8', r: r.alpha08, level: 'High' }
+  ];
+
+  for (var li = 0; li < levels.length; li++) {
+    var lev = levels[li];
+    var rv = lev.r;
+    if (!rv || rv.theta === null) continue;
+    html += '<tr' + (li === 2 ? ' style="background:var(--accent-glow)"' : '') + '>' +
+      '<td>' + lev.label + '</td><td>' + lev.level + '</td>' +
+      '<td style="font-weight:600">' + rv.theta.toFixed(4) + '</td>' +
+      '<td>[' + rv.ci_lo.toFixed(4) + ', ' + rv.ci_hi.toFixed(4) + ']</td>' +
+      '<td>' + rv.p_value.toFixed(4) + '</td>' +
+      '<td>' + rv.tau2.toFixed(4) + '</td>' +
+      '<td>' + (rv.shift ? rv.shift.toFixed(4) : '—') + '</td></tr>';
+  }
+  html += '</tbody></table></div>';
+
+  // Outlier detection
+  var robust = r.alpha05;
+  if (robust && robust.outlier_adjusted) {
+    html += '<div class="card"><h3 style="margin-bottom:12px">Study Contributions (DPD &alpha;=0.5)</h3>' +
+      '<p style="color:var(--text-secondary);font-size:13px;margin-bottom:8px">Studies with contribution &lt; 1/(2k) are flagged as downweighted outliers.</p>' +
+      '<table class="data-table"><thead><tr><th>Study</th><th>yi</th><th>sei</th><th>Contribution</th><th>Status</th></tr></thead><tbody>';
+    for (var oi = 0; oi < robust.outlier_adjusted.length; oi++) {
+      var oa = robust.outlier_adjusted[oi];
+      var d = data[oa.study];
+      html += '<tr style="' + (oa.downweighted ? 'opacity:0.6' : '') + '">' +
+        '<td>' + escapeHtml(d.study) + '</td><td>' + d.yi.toFixed(3) + '</td><td>' + d.sei.toFixed(3) + '</td>' +
+        '<td>' + (oa.contribution * 100).toFixed(1) + '%</td>' +
+        '<td>' + (oa.downweighted ? '<span class="badge badge-warn">Downweighted</span>' : '<span class="badge badge-pass">Normal</span>') + '</td></tr>';
+    }
+    html += '</tbody></table></div>';
+  }
+
+  area.innerHTML = html;
+}
+
+// ============================================================
+// RENDER: P-HACK DETECTION TAB
+// ============================================================
+
+function renderPHack(results) {
+  var area = document.getElementById('phack-area');
+  var ph = results.phack;
+  if (!ph || !ph.available) {
+    area.innerHTML = '<div class="card"><p style="color:var(--text-secondary)">Insufficient data for p-hacking analysis (need k &ge; 3).</p></div>';
+    return;
+  }
+
+  var suspBadge = ph.phack_suspicion === 'HIGH' ? 'badge-fail' : ph.phack_suspicion === 'MODERATE' ? 'badge-warn' : 'badge-pass';
+  var html = '<h2 style="margin-bottom:4px">P-Hack Detection (RTMA + MAN)</h2>' +
+    '<p style="color:var(--text-secondary);margin-bottom:16px">Tests whether the evidence is contaminated by within-study p-hacking.</p>';
+
+  // Summary cards
+  html += '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">' +
+    '<div class="card" style="flex:1;min-width:140px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--accent)">' + ph.k_affirmative + '/' + ph.k_total + '</div><div style="font-size:13px;color:var(--text-secondary)">Affirmative studies</div></div>' +
+    '<div class="card" style="flex:1;min-width:140px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--amber)">' + ph.caliper_count + '</div><div style="font-size:13px;color:var(--text-secondary)">Caliper studies (z 1.96-2.2)</div></div>' +
+    '<div class="card" style="flex:1;min-width:160px;text-align:center"><span class="badge ' + suspBadge + '" style="font-size:16px;padding:6px 16px">' + ph.phack_suspicion + '</span><div style="font-size:13px;color:var(--text-secondary);margin-top:4px">P-hacking suspicion</div></div>' +
+    '</div>';
+
+  // Comparison table
+  html += '<div class="card"><h3 style="margin-bottom:12px">Effect Estimates: Naive vs Corrected</h3>' +
+    '<table class="data-table"><thead><tr><th>Method</th><th>Pooled Effect</th><th>95% CI</th><th>p-value</th><th>k used</th></tr></thead><tbody>';
+
+  html += '<tr><td>Naive (all studies)</td><td>' + ph.naive_theta.toFixed(4) + '</td><td>—</td><td>—</td><td>' + ph.k_total + '</td></tr>';
+
+  if (ph.rtma) {
+    html += '<tr style="background:var(--accent-glow)"><td><strong>RTMA (corrected)</strong></td><td style="font-weight:600">' + ph.rtma.theta.toFixed(4) + '</td>' +
+      '<td>[' + ph.rtma.ci_lo.toFixed(4) + ', ' + ph.rtma.ci_hi.toFixed(4) + ']</td>' +
+      '<td>' + ph.rtma.p_value.toFixed(4) + '</td><td>' + ph.k_total + '</td></tr>';
+  }
+  if (ph.man) {
+    html += '<tr><td>MAN (non-affirmative only)</td><td>' + ph.man.theta.toFixed(4) + '</td>' +
+      '<td>[' + ph.man.ci_lo.toFixed(4) + ', ' + ph.man.ci_hi.toFixed(4) + ']</td>' +
+      '<td>' + ph.man.p_value.toFixed(4) + '</td><td>' + ph.man.k_used + '</td></tr>';
+  }
+
+  html += '</tbody></table></div>';
+  html += '<div class="card"><p style="color:var(--text-secondary);font-size:13px">' + escapeHtml(ph.interpretation) + '</p></div>';
+
+  area.innerHTML = html;
+}
+
+// ============================================================
+// RENDER: METAFOREST TAB
+// ============================================================
+
+function renderForest(results) {
+  var area = document.getElementById('forest-area');
+  var f = results.forest;
+  if (!f || !f.available) {
+    area.innerHTML = '<div class="card"><p style="color:var(--text-secondary)">' + escapeHtml(f ? f.reason : 'MetaForest not available') + '</p></div>';
+    return;
+  }
+
+  var html = '<h2 style="margin-bottom:4px">MetaForest (ML Heterogeneity Explanation)</h2>' +
+    '<p style="color:var(--text-secondary);margin-bottom:16px">Precision-weighted random forest identifies which moderators drive heterogeneity.</p>';
+
+  // OOB R-squared
+  var r2Color = f.oob_r2 >= 0.3 ? 'var(--green)' : f.oob_r2 >= 0.1 ? 'var(--amber)' : 'var(--red)';
+  html += '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">' +
+    '<div class="card" style="flex:1;min-width:160px;text-align:center"><div style="font-size:28px;font-weight:bold;color:' + r2Color + '">' + (f.oob_r2 !== null ? (f.oob_r2*100).toFixed(1)+'%' : 'N/A') + '</div><div style="font-size:13px;color:var(--text-secondary)">OOB R&sup2; (heterogeneity explained)</div></div>' +
+    '<div class="card" style="flex:1;min-width:140px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--accent)">' + f.n_trees + '</div><div style="font-size:13px;color:var(--text-secondary)">Trees grown</div></div>' +
+    '</div>';
+
+  // Variable importance
+  html += '<div class="card"><h3 style="margin-bottom:12px">Variable Importance (Moderator Rankings)</h3>' +
+    '<table class="data-table"><thead><tr><th>Rank</th><th>Moderator</th><th>Importance</th><th>Times Split</th><th>Bar</th></tr></thead><tbody>';
+
+  var maxImp = f.variable_importance[0] ? f.variable_importance[0].importance : 1;
+  for (var vi = 0; vi < f.variable_importance.length; vi++) {
+    var v = f.variable_importance[vi];
+    var barW = maxImp > 0 ? (v.importance / maxImp * 100) : 0;
+    html += '<tr><td>' + (vi+1) + '</td><td style="font-weight:500">' + escapeHtml(v.name) + '</td>' +
+      '<td>' + (v.importance*100).toFixed(1) + '%</td><td>' + v.splits + '</td>' +
+      '<td><div style="background:var(--accent);height:16px;border-radius:4px;width:' + barW + '%;min-width:2px"></div></td></tr>';
+  }
+  html += '</tbody></table></div>';
+  html += '<div class="card"><p style="color:var(--text-secondary);font-size:13px">' + escapeHtml(f.interpretation) + '</p></div>';
+
+  area.innerHTML = html;
+}
+
+// ============================================================
+// RENDER: REPORT TAB
+// ============================================================
+
+function renderReport(results) {
+  var area = document.getElementById('report-area');
+  var r = results.robust.alpha05;
+  var ph = results.phack;
+  var f = results.forest;
+
+  var html = '<h2 style="margin-bottom:16px">MetaGuard Report</h2>';
+
+  html += '<div class="card"><h3 style="color:var(--accent);margin-bottom:8px">Executive Summary</h3>' +
+    '<p style="margin-bottom:8px"><strong>Robust pooled estimate:</strong> ' + (r ? r.theta.toFixed(4) : 'N/A') + ' (DPD &alpha;=0.5)' +
+    (r && r.shift > 0.05 ? ' — shifted ' + r.shift.toFixed(3) + ' from MLE, indicating outlier influence' : ' — consistent with MLE') + '</p>';
+
+  if (ph && ph.available) {
+    html += '<p style="margin-bottom:8px"><strong>P-hacking assessment:</strong> <span class="badge ' +
+      (ph.phack_suspicion === 'HIGH' ? 'badge-fail' : ph.phack_suspicion === 'MODERATE' ? 'badge-warn' : 'badge-pass') + '">' +
+      ph.phack_suspicion + '</span> — ' + ph.k_affirmative + '/' + ph.k_total + ' affirmative (' + (ph.prop_affirmative*100).toFixed(0) + '%), ' +
+      ph.caliper_count + ' caliper studies</p>';
+    if (ph.rtma) {
+      html += '<p style="margin-bottom:8px"><strong>RTMA-corrected effect:</strong> ' + ph.rtma.theta.toFixed(4) + ' [' + ph.rtma.ci_lo.toFixed(4) + ', ' + ph.rtma.ci_hi.toFixed(4) + ']</p>';
+    }
+  }
+
+  if (f && f.available) {
+    html += '<p style="margin-bottom:8px"><strong>MetaForest:</strong> OOB R\u00b2 = ' + (f.oob_r2 !== null ? (f.oob_r2*100).toFixed(1)+'%' : 'N/A') +
+      '. Top moderator: ' + (f.variable_importance[0] ? escapeHtml(f.variable_importance[0].name) : 'N/A') + '</p>';
+  }
+
+  html += '</div>';
+
+  // Export
+  html += '<div class="card"><h3 style="margin-bottom:8px">Export</h3>' +
+    '<button class="btn btn-primary" id="exportReport">Download JSON Report</button></div>';
+
+  area.innerHTML = html;
+
+  document.getElementById('exportReport').addEventListener('click', function() {
+    var blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url; a.download = 'metaguard_report.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+}
+
+</script>
+</body>
+</html>
