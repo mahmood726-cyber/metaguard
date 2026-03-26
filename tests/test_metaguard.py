@@ -23,12 +23,12 @@ class TestAppLoads:
 
     def test_tabs_present(self, driver):
         tabs = driver.find_elements('css selector', '.tab-btn')
-        assert len(tabs) == 6
+        assert len(tabs) == 8  # Data, Robust, P-Hack, MetaForest, Rare Events, Causal, Report, About
 
 
 class TestTabSwitching:
     def test_cycle_all_tabs(self, driver):
-        for tab in ['data', 'robust', 'phack', 'forest', 'report', 'about']:
+        for tab in ['data', 'robust', 'phack', 'forest', 'rare', 'causal', 'report', 'about']:
             driver.find_element('css selector', f'.tab-btn[data-tab="{tab}"]').click()
             time.sleep(0.2)
             panel = driver.find_element('id', f'tab-{tab}')
