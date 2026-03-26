@@ -223,17 +223,17 @@ function robustPool(yi, sei, alpha) {
   var tau2 = Math.max(0, (Q-(k-1))/C);
 
   // Step 2: IRLS with DPD weights (iterate to convergence)
+  // S-1 fix: DPD weight = phi(z)^alpha / sigma_i (not sigma_i^2)
   for (var iter = 0; iter < 50; iter++) {
     var totalVar = vi.map(function(v) { return v + tau2; });
     var sigma = totalVar.map(function(tv) { return Math.sqrt(tv); });
 
-    // DPD weights: w_i = phi((yi-theta)/sigma_i)^alpha / sigma_i
-    // where phi is the normal density
+    // DPD location weights: w_i = phi(z_i)^alpha / sigma_i (Noma 2024, eq. 4)
     var dpdWeights = [];
     for (var i = 0; i < k; i++) {
       var z = (yi[i] - theta) / sigma[i];
       var phiZ = dnorm(z);
-      dpdWeights.push(Math.pow(phiZ, alpha) / totalVar[i]);
+      dpdWeights.push(Math.pow(phiZ, alpha) / sigma[i]);
     }
 
     var dwSum = dpdWeights.reduce(function(a,b){return a+b;},0);
@@ -241,10 +241,15 @@ function robustPool(yi, sei, alpha) {
 
     var thetaNew = dpdWeights.reduce(function(a,w,i){return a+w*yi[i];},0) / dwSum;
 
-    // Update tau2 via method-of-moments with DPD weights
-    var Qw = dpdWeights.reduce(function(a,w,i){return a+w*(yi[i]-thetaNew)*(yi[i]-thetaNew);},0);
-    var Cw = dwSum - dpdWeights.reduce(function(a,w){return a+w*w;},0)/dwSum;
-    var tau2New = Math.max(0, (Qw - (k-1)*dwSum/k) / (Cw > 0 ? Cw : 1));
+    // S-5 fix: tau2 via DPD-weighted moment estimator (DL structure with DPD weights)
+    var dpdWi2 = dpdWeights.map(function(w) { return w / sigma[dpdWeights.indexOf(w)] || w; });
+    // Use inverse-totalVar weights scaled by DPD for tau2
+    var tauWi = [];
+    for (var ti = 0; ti < k; ti++) { tauWi.push(Math.pow(dnorm((yi[ti]-thetaNew)/sigma[ti]), alpha) / totalVar[ti]); }
+    var tauWSum = tauWi.reduce(function(a,b){return a+b;},0);
+    var Qw = tauWi.reduce(function(a,w,i){return a+w*(yi[i]-thetaNew)*(yi[i]-thetaNew);},0);
+    var Cw = tauWSum - tauWi.reduce(function(a,w){return a+w*w;},0)/tauWSum;
+    var tau2New = Math.max(0, (Qw - (k-1)) / (Cw > 0 ? Cw : 1));
 
     if (Math.abs(thetaNew - theta) < 1e-8 && Math.abs(tau2New - tau2) < 1e-8) {
       theta = thetaNew; tau2 = tau2New; break;
@@ -258,10 +263,20 @@ function robustPool(yi, sei, alpha) {
   var finalW = [];
   for (var fi = 0; fi < k; fi++) {
     var fz = (yi[fi] - theta) / finalSigma[fi];
-    finalW.push(Math.pow(dnorm(fz), alpha) / finalVar[fi]);
+    finalW.push(Math.pow(dnorm(fz), alpha) / finalSigma[fi]);
   }
   var fwSum = finalW.reduce(function(a,b){return a+b;},0);
-  var seTheta = fwSum > 0 ? Math.sqrt(1/fwSum) : 0;
+
+  // S-6 fix: Sandwich SE for DPD M-estimator
+  // A = sum(w_i^2 * (1 - alpha*z_i^2) / sigma_i), B = sum(w_i^2 * z_i^2 / sigma_i^2)
+  var sandA = 0, sandB = 0;
+  for (var si = 0; si < k; si++) {
+    var sz = (yi[si] - theta) / finalSigma[si];
+    var sw = finalW[si];
+    sandA += sw * (1 - alpha * sz * sz);
+    sandB += sw * sw * finalSigma[si] * finalSigma[si];
+  }
+  var seTheta = (Math.abs(sandA) > 1e-10) ? Math.sqrt(sandB) / Math.abs(sandA) : (fwSum > 0 ? Math.sqrt(1/fwSum) : 0);
 
   var z95 = qnorm(0.975);
   var pval = 2*(1-pnorm(Math.abs(theta/seTheta)));
@@ -292,80 +307,86 @@ function robustPool(yi, sei, alpha) {
 // ============================================================
 
 function rtmaAnalysis(yi, sei, pValues, alpha) {
-  alpha = alpha || 0.05;
+  // S-10 fix + P1-2 fix: use nullish check, not ||
+  alpha = (alpha != null) ? alpha : 0.05;
   var k = yi.length;
   if (k < 3) return { available: false };
 
-  // Compute z-scores and p-values
+  var vi = sei.map(function(s) { return s*s; });
   var zScores = yi.map(function(y,i) { return sei[i] > 0 ? y/sei[i] : 0; });
 
-  // If p-values not provided, compute from z-scores (two-sided)
   if (!pValues || pValues.length !== k) {
     pValues = zScores.map(function(z) { return 2*(1-pnorm(Math.abs(z))); });
   }
 
-  // Classify studies as affirmative or non-affirmative
-  // Affirmative: p < alpha AND effect in expected direction (yi > 0)
+  // S-10 fix: Infer expected direction from the majority of effects
+  var posCount = yi.filter(function(y) { return y > 0; }).length;
+  var expectedPositive = posCount >= k/2;
+
+  // Classify: affirmative = significant AND in expected direction
   var affirmative = [];
   var nonAffirmative = [];
+  var affirmativeSet = {};
   for (var i = 0; i < k; i++) {
-    if (pValues[i] < alpha && yi[i] > 0) {
+    var inExpectedDir = expectedPositive ? yi[i] > 0 : yi[i] < 0;
+    if (pValues[i] < alpha && inExpectedDir) {
       affirmative.push(i);
+      affirmativeSet[i] = true;
     } else {
       nonAffirmative.push(i);
     }
   }
 
-  // --- MAN: Meta-Analysis of Non-affirmative studies ---
+  // --- S-4 fix: MAN with random-effects (DL), not fixed-effect ---
   var manResult = null;
   if (nonAffirmative.length >= 2) {
     var manYi = nonAffirmative.map(function(idx) { return yi[idx]; });
-    var manSei = nonAffirmative.map(function(idx) { return sei[idx]; });
-    var manVi = manSei.map(function(s) { return s*s; });
+    var manVi = nonAffirmative.map(function(idx) { return vi[idx]; });
     var manWi = manVi.map(function(v) { return 1/v; });
     var manWSum = manWi.reduce(function(a,b){return a+b;},0);
-    var manTheta = manWi.reduce(function(a,w,j){return a+w*manYi[j];},0)/manWSum;
-    var manSe = Math.sqrt(1/manWSum);
+    var manThetaFE = manWi.reduce(function(a,w,j){return a+w*manYi[j];},0)/manWSum;
+    var manQ = manWi.reduce(function(a,w,j){return a+w*(manYi[j]-manThetaFE)*(manYi[j]-manThetaFE);},0);
+    var manC = manWSum - manWi.reduce(function(a,w){return a+w*w;},0)/manWSum;
+    var manTau2 = Math.max(0, (manQ - (nonAffirmative.length-1)) / (manC > 0 ? manC : 1));
+    // RE weights
+    var manWiRE = manVi.map(function(v) { return 1/(v+manTau2); });
+    var manWRE = manWiRE.reduce(function(a,b){return a+b;},0);
+    var manTheta = manWiRE.reduce(function(a,w,j){return a+w*manYi[j];},0)/manWRE;
+    var manSe = Math.sqrt(1/manWRE);
     var z95 = qnorm(0.975);
     manResult = {
-      theta: manTheta, se: manSe,
+      theta: manTheta, se: manSe, tau2: manTau2,
       ci_lo: manTheta - z95*manSe, ci_hi: manTheta + z95*manSe,
       p_value: 2*(1-pnorm(Math.abs(manTheta/manSe))),
       k_used: nonAffirmative.length
     };
   }
 
-  // --- RTMA: Right-Truncated Meta-Analysis ---
-  // EM algorithm to estimate true effect distribution assuming truncation
-  // of z-scores above the affirmative threshold
-  var zThreshold = qnorm(1 - alpha/2); // z-threshold for significance
+  // --- S-3 fix: RTMA with correct truncation probability ---
+  // yi ~ N(mu, vi + tau2) marginally. Truncation: affirmative = |yi/sei| > zThreshold
+  var zThreshold = qnorm(1 - alpha/2);
 
-  // Initial estimates from all studies
-  var vi = sei.map(function(s) { return s*s; });
   var wi = vi.map(function(v) { return 1/v; });
   var wSum = wi.reduce(function(a,b){return a+b;},0);
   var muHat = wi.reduce(function(a,w,i){return a+w*yi[i];},0)/wSum;
-  var tau2Hat = 0.05; // initial heterogeneity
+  var tau2Hat = 0.05;
 
-  // EM iterations
   for (var emIter = 0; emIter < 100; emIter++) {
     var muOld = muHat, tau2Old = tau2Hat;
-
-    // E-step: compute expected sufficient statistics
     var sumW = 0, sumWY = 0, sumWY2 = 0;
+
     for (var ei = 0; ei < k; ei++) {
       var totalVar_i = vi[ei] + tau2Hat;
+      var margSigma = Math.sqrt(totalVar_i);
       var w_i = 1/totalVar_i;
+      var probObs = 1;
 
-      // Probability of being observed (not truncated)
-      // P(|z_i| > zThreshold | mu, tau2) for affirmative studies
-      var condMean = muHat / Math.sqrt(totalVar_i);
-      var probObs = 1; // non-affirmative studies always observed
-
-      if (affirmative.indexOf(ei) >= 0) {
-        // Likelihood contribution adjusted for truncation
-        probObs = 1 - pnorm(zThreshold - condMean * Math.sqrt(vi[ei])) +
-                  pnorm(-zThreshold - condMean * Math.sqrt(vi[ei]));
+      if (affirmativeSet[ei]) {
+        // S-3 fix: P(|yi/sei| > zThresh) where yi ~ N(mu, vi+tau2)
+        // = 1 - Phi((zThresh*sei - mu)/margSigma) + Phi((-zThresh*sei - mu)/margSigma)
+        var hiZ = (zThreshold * sei[ei] - muHat) / margSigma;
+        var loZ = (-zThreshold * sei[ei] - muHat) / margSigma;
+        probObs = (1 - pnorm(hiZ)) + pnorm(loZ);
         probObs = Math.max(probObs, 0.01);
       }
 
@@ -377,17 +398,28 @@ function rtmaAnalysis(yi, sei, pValues, alpha) {
 
     muHat = sumW > 0 ? sumWY / sumW : muOld;
     tau2Hat = Math.max(0, sumWY2 / sumW - 1/sumW);
-
     if (Math.abs(muHat - muOld) < 1e-8 && Math.abs(tau2Hat - tau2Old) < 1e-8) break;
   }
 
-  var rtmaSe = Math.sqrt(1/wSum); // approximate SE
+  // S-2 fix: SE from the truncation-adjusted information
+  var rtmaInfoSum = 0;
+  for (var ri = 0; ri < k; ri++) {
+    var rtv = vi[ri] + tau2Hat;
+    var rProb = 1;
+    if (affirmativeSet[ri]) {
+      var rhi = (zThreshold * sei[ri] - muHat) / Math.sqrt(rtv);
+      var rlo = (-zThreshold * sei[ri] - muHat) / Math.sqrt(rtv);
+      rProb = Math.max(0.01, (1 - pnorm(rhi)) + pnorm(rlo));
+    }
+    rtmaInfoSum += (1/rtv) / rProb;
+  }
+  var rtmaSe = rtmaInfoSum > 0 ? Math.sqrt(1/rtmaInfoSum) : 0;
   var z95r = qnorm(0.975);
 
   var rtmaResult = {
     theta: muHat, se: rtmaSe, tau2: tau2Hat,
     ci_lo: muHat - z95r*rtmaSe, ci_hi: muHat + z95r*rtmaSe,
-    p_value: 2*(1-pnorm(Math.abs(muHat/rtmaSe)))
+    p_value: 2*(1-pnorm(Math.abs(rtmaSe > 0 ? muHat/rtmaSe : 0)))
   };
 
   // Naive pooling for comparison
@@ -425,8 +457,9 @@ function rtmaAnalysis(yi, sei, pValues, alpha) {
 
 function metaForest(yi, sei, moderators, nTrees, seed) {
   // moderators: array of objects { name: string, values: number[] }
-  nTrees = nTrees || 200;
-  seed = seed || 42;
+  // P1-5: cap nTrees at 2000; P1-2: nullish check
+  nTrees = Math.min((nTrees != null) ? nTrees : 200, 2000);
+  seed = (seed != null) ? seed : 42;
   var k = yi.length;
   if (k < 5 || !moderators || moderators.length === 0) {
     return { available: false, reason: k < 5 ? 'Need at least 5 studies' : 'No moderator variables provided' };
@@ -437,10 +470,15 @@ function metaForest(yi, sei, moderators, nTrees, seed) {
   var wSum = wi.reduce(function(a,b){return a+b;},0);
   var normW = wi.map(function(w) { return wSum > 0 ? w/wSum : 1/k; });
 
-  // Seeded PRNG
-  var rng = (function(s) {
-    return function() { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
-  })(seed);
+  // P1-3 fix: xoshiro128** PRNG (from Asa)
+  var rng = (function(a,b,c,d) {
+    return function() {
+      var t = b << 9; var r = a * 5; r = (r << 7 | r >>> 25) * 9;
+      c ^= a; d ^= b; b ^= c; a ^= d; c ^= t;
+      d = d << 11 | d >>> 21;
+      return (r >>> 0) / 4294967296;
+    };
+  })(seed, seed ^ 0x9E3779B9, seed ^ 0x6A09E667, seed ^ 0xBB67AE85);
 
   var nMod = moderators.length;
   var mtry = Math.max(1, Math.floor(Math.sqrt(nMod))); // features per split
@@ -476,55 +514,125 @@ function metaForest(yi, sei, moderators, nTrees, seed) {
       available.splice(pick, 1);
     }
 
-    // Find best split (simple single-split stump for each tree)
-    var bestSSR = Infinity, bestFeat = -1, bestSplit = 0;
-    for (var ffi = 0; ffi < featureIdx.length; ffi++) {
-      var feat = featureIdx[ffi];
-      var vals = moderators[feat].values;
-      // Try median split
-      var sortedVals = sample.map(function(idx) { return vals[idx]; }).sort(function(a,b){return a-b;});
-      var medianVal = sortedVals[Math.floor(sortedVals.length/2)];
+    // S-7 fix: Recursive tree (up to depth 3) with S-9 fix: try multiple split points
+    var maxDepth = Math.min(3, Math.floor(Math.log2(sample.length)));
 
-      var leftY = 0, leftW = 0, rightY = 0, rightW = 0;
-      for (var si2 = 0; si2 < sample.length; si2++) {
-        var idx = sample[si2];
-        if (vals[idx] <= medianVal) { leftY += wi[idx]*yi[idx]; leftW += wi[idx]; }
-        else { rightY += wi[idx]*yi[idx]; rightW += wi[idx]; }
-      }
-      var leftMean = leftW > 0 ? leftY/leftW : 0;
-      var rightMean = rightW > 0 ? rightY/rightW : 0;
-
-      var ssr = 0;
-      for (var si3 = 0; si3 < sample.length; si3++) {
-        var idx2 = sample[si3];
-        var pred = vals[idx2] <= medianVal ? leftMean : rightMean;
-        ssr += wi[idx2] * (yi[idx2] - pred) * (yi[idx2] - pred);
+    function findBestSplit(indices, depth) {
+      if (indices.length < 4 || depth >= maxDepth) {
+        // Leaf: weighted mean
+        var lw = 0, ly = 0;
+        for (var li = 0; li < indices.length; li++) { lw += wi[indices[li]]; ly += wi[indices[li]] * yi[indices[li]]; }
+        var leafVal = lw > 0 ? ly / lw : 0;
+        return { leaf: true, value: leafVal };
       }
 
-      if (ssr < bestSSR) { bestSSR = ssr; bestFeat = feat; bestSplit = medianVal; }
+      // S-9 fix: select random features per split (not per tree)
+      var avail2 = [];
+      for (var ai = 0; ai < nMod; ai++) avail2.push(ai);
+      var fIdx2 = [];
+      for (var m2 = 0; m2 < mtry && avail2.length > 0; m2++) {
+        var p2 = Math.floor(rng() * avail2.length);
+        fIdx2.push(avail2[p2]); avail2.splice(p2, 1);
+      }
+
+      var bSSR = Infinity, bFeat = -1, bSplit = 0;
+      for (var ff = 0; ff < fIdx2.length; ff++) {
+        var feat = fIdx2[ff];
+        var vals = moderators[feat].values;
+        // S-9: try 3 quantile split points (25th, 50th, 75th percentile)
+        var sVals = indices.map(function(idx) { return vals[idx]; }).sort(function(a,b){return a-b;});
+        var splits = [sVals[Math.floor(sVals.length*0.25)], sVals[Math.floor(sVals.length*0.5)], sVals[Math.floor(sVals.length*0.75)]];
+        // Deduplicate
+        var uniq = {}; var uSplits = [];
+        for (var us = 0; us < splits.length; us++) { if (!uniq[splits[us]]) { uniq[splits[us]] = true; uSplits.push(splits[us]); } }
+
+        for (var sp = 0; sp < uSplits.length; sp++) {
+          var sv = uSplits[sp];
+          var lY = 0, lW = 0, rY = 0, rW = 0;
+          for (var s2 = 0; s2 < indices.length; s2++) {
+            var ix = indices[s2];
+            if (vals[ix] <= sv) { lY += wi[ix]*yi[ix]; lW += wi[ix]; }
+            else { rY += wi[ix]*yi[ix]; rW += wi[ix]; }
+          }
+          if (lW === 0 || rW === 0) continue;
+          var lM = lY/lW, rM = rY/rW;
+          var ssr = 0;
+          for (var s3 = 0; s3 < indices.length; s3++) {
+            var ix2 = indices[s3];
+            var pr = vals[ix2] <= sv ? lM : rM;
+            ssr += wi[ix2] * (yi[ix2] - pr) * (yi[ix2] - pr);
+          }
+          if (ssr < bSSR) { bSSR = ssr; bFeat = feat; bSplit = sv; }
+        }
+      }
+      if (bFeat < 0) {
+        var lw2 = 0, ly2 = 0;
+        for (var li2 = 0; li2 < indices.length; li2++) { lw2 += wi[indices[li2]]; ly2 += wi[indices[li2]] * yi[indices[li2]]; }
+        return { leaf: true, value: lw2 > 0 ? ly2/lw2 : 0 };
+      }
+      var leftIdx = [], rightIdx = [];
+      var bVals = moderators[bFeat].values;
+      for (var si5 = 0; si5 < indices.length; si5++) {
+        if (bVals[indices[si5]] <= bSplit) leftIdx.push(indices[si5]);
+        else rightIdx.push(indices[si5]);
+      }
+      return { leaf: false, feat: bFeat, split: bSplit, left: findBestSplit(leftIdx, depth+1), right: findBestSplit(rightIdx, depth+1) };
     }
 
-    if (bestFeat < 0) continue;
+    var treeRoot = findBestSplit(sample, 0);
 
-    // Predict for OOB samples
-    var vals2 = moderators[bestFeat].values;
-    var leftY2 = 0, leftW2 = 0, rightY2 = 0, rightW2 = 0;
-    for (var si4 = 0; si4 < sample.length; si4++) {
-      var idx3 = sample[si4];
-      if (vals2[idx3] <= bestSplit) { leftY2 += wi[idx3]*yi[idx3]; leftW2 += wi[idx3]; }
-      else { rightY2 += wi[idx3]*yi[idx3]; rightW2 += wi[idx3]; }
+    function predictTree(node, idx) {
+      if (node.leaf) return node.value;
+      return moderators[node.feat].values[idx] <= node.split ? predictTree(node.left, idx) : predictTree(node.right, idx);
     }
-    var lm = leftW2>0 ? leftY2/leftW2 : 0;
-    var rm = rightW2>0 ? rightY2/rightW2 : 0;
+
+    // Collect which features were used in this tree
+    function collectFeats(node, feats) {
+      if (node.leaf) return;
+      feats[node.feat] = (feats[node.feat] || 0) + 1;
+      collectFeats(node.left, feats); collectFeats(node.right, feats);
+    }
+    var treeFeatCounts = {};
+    collectFeats(treeRoot, treeFeatCounts);
 
     for (var oi = 0; oi < k; oi++) {
-      var pred2 = vals2[oi] <= bestSplit ? lm : rm;
+      var pred2 = predictTree(treeRoot, oi);
       predictions[oi] += pred2;
       if (!inBag[oi]) { oobPred[oi] += pred2; oobCount[oi]++; }
     }
 
-    // Variable importance: record which feature was used
-    importance[bestFeat] += 1;
+    // S-8 fix: Permutation importance — for each feature used in this tree,
+    // permute its OOB values and measure error increase
+    var oobIdx = [];
+    for (var obi = 0; obi < k; obi++) { if (!inBag[obi]) oobIdx.push(obi); }
+    if (oobIdx.length > 2) {
+      // Baseline OOB error
+      var baseErr = 0;
+      for (var be = 0; be < oobIdx.length; be++) {
+        var bPred = predictTree(treeRoot, oobIdx[be]);
+        baseErr += wi[oobIdx[be]] * (yi[oobIdx[be]] - bPred) * (yi[oobIdx[be]] - bPred);
+      }
+      for (var tf = 0; tf < nMod; tf++) {
+        if (!treeFeatCounts[tf]) continue;
+        // Permute feature tf values among OOB samples
+        var origVals = oobIdx.map(function(ix) { return moderators[tf].values[ix]; });
+        var permVals = origVals.slice();
+        for (var pi2 = permVals.length - 1; pi2 > 0; pi2--) {
+          var rj = Math.floor(rng() * (pi2 + 1));
+          var tmp = permVals[pi2]; permVals[pi2] = permVals[rj]; permVals[rj] = tmp;
+        }
+        // Temporarily swap values
+        for (var sv2 = 0; sv2 < oobIdx.length; sv2++) moderators[tf].values[oobIdx[sv2]] = permVals[sv2];
+        var permErr = 0;
+        for (var pe = 0; pe < oobIdx.length; pe++) {
+          var pPred = predictTree(treeRoot, oobIdx[pe]);
+          permErr += wi[oobIdx[pe]] * (yi[oobIdx[pe]] - pPred) * (yi[oobIdx[pe]] - pPred);
+        }
+        // Restore
+        for (var rv = 0; rv < oobIdx.length; rv++) moderators[tf].values[oobIdx[rv]] = origVals[rv];
+        importance[tf] += (permErr - baseErr);
+      }
+    }
   }
 
   // Average predictions
@@ -672,10 +780,10 @@ var DEMO_DATA = [
     var rows = parsed.rows.map(function(r) {
       return {
         study: r.study || r.name || '',
-        yi: parseFloat(r.yi || r.effect || r.es || 0),
-        sei: parseFloat(r.sei || r.se || 0),
-        p_value: parseFloat(r.p_value || r.p || r.pvalue || NaN),
-        quality: parseFloat(r.quality || r.rob || 0.5),
+        yi: parseFloat(r.yi !== undefined && r.yi !== '' ? r.yi : (r.effect !== undefined && r.effect !== '' ? r.effect : (r.es !== undefined && r.es !== '' ? r.es : 0))),
+        sei: parseFloat(r.sei !== undefined && r.sei !== '' ? r.sei : (r.se !== undefined && r.se !== '' ? r.se : 0)),
+        p_value: parseFloat(r.p_value !== undefined && r.p_value !== '' ? r.p_value : (r.p !== undefined && r.p !== '' ? r.p : (r.pvalue !== undefined && r.pvalue !== '' ? r.pvalue : NaN))),
+        quality: parseFloat(r.quality !== undefined && r.quality !== '' ? r.quality : (r.rob !== undefined && r.rob !== '' ? r.rob : 0.5)),
         n: parseInt(r.n || r.total || 0),
         year: parseInt(r.year || 0),
         blinding: parseInt(r.blinding || r.blind || 0)
