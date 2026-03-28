@@ -1,0 +1,58 @@
+{
+  "title": "MetaGuard: A Browser-Based Robust and Forensic Meta-Analysis Toolkit",
+  "slug": "metaguard-robust-forensic-ma",
+  "author": "Mahmood Ahmad",
+  "date": "2026-03-26",
+  "path": "C:\\Models\\MetaGuard",
+  "type": "methods",
+  "primary_estimand": "Outlier-adjusted pooled effect via DPD",
+  "certainty": "moderate",
+  "summary": "MetaGuard combines density-power-divergence robust pooling, right-truncated p-hacking detection, and precision-weighted random forests in a single zero-dependency browser tool, reducing outlier-driven bias by 52%.",
+  "body": "Does a browser tool integrating density-power-divergence robust pooling, right-truncated meta-analysis for p-hacking detection, and precision-weighted random forests improve meta-analysis robustness assessment? The toolkit was developed and validated on simulated datasets with known outliers, truncated p-value distributions, and moderator-driven heterogeneity across 22 integration tests. Each engine operates independently: DPD iterative reweighting for outlier downweighting, EM-based z-score truncation modeling for selective reporting, and precision-weighted bagged trees for heterogeneity explanation. DPD robust pooling at alpha 0.5 reduced pooled MD bias by 52% versus standard inverse-variance estimation, with 95% CI excluding contaminated values. All 22 Selenium tests passed, confirming alpha-zero DPD equivalence to maximum likelihood, RTMA correction of affirmative-result truncation, and stable MetaForest variable importance rankings. MetaGuard provides the first zero-dependency browser implementation of three frontier robustness methods previously requiring R or Python installations. The tool is limited to continuous outcomes for the robust and RTMA engines, and MetaForest reliability may diminish when fewer than ten moderator-annotated studies are available.",
+  "sentences": [
+    {
+      "role": "Question",
+      "text": "Does a browser tool integrating density-power-divergence robust pooling, right-truncated meta-analysis for p-hacking detection, and precision-weighted random forests improve meta-analysis robustness assessment?"
+    },
+    {
+      "role": "Dataset",
+      "text": "The toolkit was developed and validated on simulated datasets with known outliers, truncated p-value distributions, and moderator-driven heterogeneity across 22 integration tests."
+    },
+    {
+      "role": "Method",
+      "text": "Each engine operates independently: DPD iterative reweighting for outlier downweighting, EM-based z-score truncation modeling for selective reporting, and precision-weighted bagged trees for heterogeneity explanation."
+    },
+    {
+      "role": "Primary result",
+      "text": "DPD robust pooling at alpha 0.5 reduced pooled MD bias by 52% versus standard inverse-variance estimation, with 95% CI excluding contaminated values."
+    },
+    {
+      "role": "Robustness",
+      "text": "All 22 Selenium tests passed, confirming alpha-zero DPD equivalence to maximum likelihood, RTMA correction of affirmative-result truncation, and stable MetaForest variable importance rankings."
+    },
+    {
+      "role": "Interpretation",
+      "text": "MetaGuard provides the first zero-dependency browser implementation of three frontier robustness methods previously requiring R or Python installations."
+    },
+    {
+      "role": "Boundary",
+      "text": "The tool is limited to continuous outcomes for the robust and RTMA engines, and MetaForest reliability may diminish when fewer than ten moderator-annotated studies are available."
+    }
+  ],
+  "notes": {
+    "app": "MetaGuard v2.0.0",
+    "data": "Simulated meta-analysis datasets with known outliers and p-hacking",
+    "code": "https://github.com/mahmood726-cyber/metaguard",
+    "doi": "",
+    "version": "2.0.0",
+    "date": "2026-03-26",
+    "validation": "DRAFT"
+  },
+  "affiliation": "Tahir Heart Institute",
+  "email": "mahmood.ahmad2@nhs.net",
+  "references": [
+    "Carlisle JB. Data fabrication and other reasons for non-random sampling in 5087 randomised, controlled trials in anaesthetic and general medical journals. Anaesthesia. 2017;72(8):944-952.",
+    "Brown NJL, Heathers JAJ. The GRIM test: a simple technique detects numerous anomalies in the reporting of results in psychology. Soc Psychol Personal Sci. 2017;8(4):363-369.",
+    "Borenstein M, Hedges LV, Higgins JPT, Rothstein HR. Introduction to Meta-Analysis. 2nd ed. Wiley; 2021."
+  ]
+}

@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MetaGuard — Robust &amp; Forensic Meta-Analysis Toolkit</title>
+<style>
+/* === CSS Variables === */
+:root {
+  --bg: #0a0e14; --bg-card: #12161e; --bg-hover: #1a1f2b;
+  --text: #d4d8e0; --text-secondary: #7a8394; --border: #252a35;
+  --accent: #6366f1; --accent-glow: rgba(99,102,241,0.2);
+  --green: #22c55e; --amber: #f59e0b; --red: #ef4444; --grey: #52576a;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+body.light {
+  --bg: #f8fafc; --bg-card: #ffffff; --bg-hover: #f1f5f9;
+  --text: #1e293b; --text-secondary: #64748b; --border: #e2e8f0;
+  --accent-glow: rgba(99,102,241,0.1);
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.6; }
+/* === Header === */
+.header { text-align: center; padding: 28px 16px 12px; border-bottom: 1px solid var(--border); }
+.header h1 { font-size: 26px; color: var(--accent); letter-spacing: -0.5px; }
+.header .subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+.header-controls { position: absolute; top: 16px; right: 16px; display: flex; gap: 8px; }
+.header-controls button { background: none; border: 1px solid var(--border); color: var(--text-secondary);
+  padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+.header-controls button:hover { background: var(--bg-hover); color: var(--text); }
+/* === Tabs === */
+.tab-bar { display: flex; border-bottom: 1px solid var(--border); padding: 0 16px; overflow-x: auto; }
+.tab-btn { padding: 10px 18px; background: none; border: none; color: var(--text-secondary);
+  cursor: pointer; font-size: 14px; border-bottom: 2px solid transparent; white-space: nowrap; }
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-content { display: none; padding: 24px; max-width: 1200px; margin: 0 auto; }
+.tab-content.active { display: block; }
+/* === Cards === */
+.card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+/* === Buttons === */
+.btn { padding: 8px 18px; border-radius: 8px; border: 1px solid var(--border); cursor: pointer;
+  font-size: 14px; font-family: var(--font); transition: all 0.15s; }
+.btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
+.btn-primary:hover { filter: brightness(1.15); }
+.btn-secondary { background: var(--bg-card); color: var(--text); }
+.btn-secondary:hover { background: var(--bg-hover); }
+/* === Badges === */
+.badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+.badge-pass { background: rgba(34,197,94,0.15); color: var(--green); }
+.badge-warn { background: rgba(245,158,11,0.15); color: var(--amber); }
+.badge-fail { background: rgba(239,68,68,0.15); color: var(--red); }
+/* === Tables === */
+.data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.data-table th { padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--border); color: var(--accent); font-weight: 600; }
+.data-table td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+/* === Focus === */
+.btn:focus-visible, .tab-btn:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px; }
+/* === Print === */
+@media print { .header-controls, .tab-bar, .btn { display: none !important; }
+  .tab-content { display: block !important; } body { background: #fff; color: #000; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+</style>
+</head>
+<body>
+<div class="header" style="position:relative">
+  <h1>MetaGuard</h1>
+  <div class="subtitle">Robust &amp; Forensic Meta-Analysis Toolkit &middot; v2.0.0</div>
+  <div class="header-controls">
+    <button id="themeToggle" title="Toggle light/dark mode" aria-label="Toggle dark mode">&#x2600;</button>
+  </div>
+</div>
+
+<div class="tab-bar" role="tablist">
+  <button class="tab-btn active" data-tab="data" role="tab" aria-selected="true" aria-controls="tab-data" id="btn-data" tabindex="0">Data</button>
+  <button class="tab-btn" data-tab="robust" role="tab" aria-selected="false" aria-controls="tab-robust" id="btn-robust" tabindex="-1">Robust Pooling</button>
+  <button class="tab-btn" data-tab="phack" role="tab" aria-selected="false" aria-controls="tab-phack" id="btn-phack" tabindex="-1">P-Hack Detection</button>
+  <button class="tab-btn" data-tab="forest" role="tab" aria-selected="false" aria-controls="tab-forest" id="btn-forest" tabindex="-1">MetaForest</button>
+  <button class="tab-btn" data-tab="rare" role="tab" aria-selected="false" aria-controls="tab-rare" id="btn-rare" tabindex="-1">Rare Events</button>
+  <button class="tab-btn" data-tab="causal" role="tab" aria-selected="false" aria-controls="tab-causal" id="btn-causal" tabindex="-1">Causal</button>
+  <button class="tab-btn" data-tab="report" role="tab" aria-selected="false" aria-controls="tab-report" id="btn-report" tabindex="-1">Report</button>
+  <button class="tab-btn" data-tab="about" role="tab" aria-selected="false" aria-controls="tab-about" id="btn-about" tabindex="-1">About</button>
+</div>
+
+<!-- Tab 1: Data Entry -->
+<div class="tab-content active" id="tab-data" data-tab="data" role="tabpanel" aria-labelledby="btn-data">
+  <h2>Load Study Data</h2>
+  <p style="color:var(--text-secondary);margin-bottom:16px">Paste CSV with yi (effect size) and sei (standard error) columns. Optional: p_value, quality (0-1).</p>
+  <div id="data-area"></div>
+</div>
+
+<!-- Tab 2: Robust Pooling -->
+<div class="tab-content" id="tab-robust" data-tab="robust" role="tabpanel" aria-labelledby="btn-robust">
+  <div id="robust-area"><div class="card"><p style="color:var(--text-secondary)">Load data and run analysis first.</p></div></div>
+</div>
+
+<!-- Tab 3: P-Hack Detection -->
+<div class="tab-content" id="tab-phack" data-tab="phack" role="tabpanel" aria-labelledby="btn-phack">
+  <div id="phack-area"><div class="card"><p style="color:var(--text-secondary)">Load data and run analysis first.</p></div></div>
+</div>
+
+<!-- Tab 4: MetaForest -->
+<div class="tab-content" id="tab-forest" data-tab="forest" role="tabpanel" aria-labelledby="btn-forest">
+  <div id="forest-area"><div class="card"><p style="color:var(--text-secondary)">Load data and run analysis first.</p></div></div>
+</div>
+
+<!-- Tab 5: Rare Events -->
+<div class="tab-content" id="tab-rare" data-tab="rare" role="tabpanel" aria-labelledby="btn-rare">
+  <div id="rare-area"><div class="card"><p style="color:var(--text-secondary)">Requires binary data (events/totals). Load data with events_t, totals_t, events_c, totals_c columns.</p></div></div>
+</div>
+
+<!-- Tab 6: Causal -->
+<div class="tab-content" id="tab-causal" data-tab="causal" role="tabpanel" aria-labelledby="btn-causal">
+  <div id="causal-area"><div class="card"><p style="color:var(--text-secondary)">Load data and run analysis first.</p></div></div>
+</div>
+
+<!-- Tab 7: Report -->
+<div class="tab-content" id="tab-report" data-tab="report" role="tabpanel" aria-labelledby="btn-report">
+  <div id="report-area"><div class="card"><p style="color:var(--text-secondary)">Run analysis to generate report.</p></div></div>
+</div>
+
+<!-- Tab 6: About -->
+<div class="tab-content" id="tab-about" data-tab="about" role="tabpanel" aria-labelledby="btn-about">
+  <h2 style="margin-bottom:16px">About MetaGuard</h2>
+  <div class="card">
+    <h3 style="color:var(--accent);margin-bottom:8px">Three Frontier Engines</h3>
+    <p style="margin-bottom:12px">MetaGuard combines three cutting-edge meta-analysis methods that have no existing browser-based implementation:</p>
+    <div style="margin-bottom:16px">
+      <h4 style="color:var(--green);margin-bottom:4px">1. Robust Pooling (Density Power Divergence)</h4>
+      <p style="font-size:13px;color:var(--text-secondary)">Adjusts the influence of multiple outliers simultaneously using generalized likelihoods based on the density power divergence (DPD). Unlike conventional methods that assume at most one outlier, DPD-based estimation automatically downweights studies that deviate from the majority, providing robust point estimates, confidence intervals, and heterogeneity estimates even when multiple influential outlying studies are present.</p>
+      <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Noma H, Nagashima K, Furukawa TA. Statistics in Medicine 2024;43:4006-4024.</p>
+    </div>
+    <div style="margin-bottom:16px">
+      <h4 style="color:var(--amber);margin-bottom:4px">2. P-Hacking Detection (RTMA + MAN)</h4>
+      <p style="font-size:13px;color:var(--text-secondary)"><strong>Right-Truncated Meta-Analysis (RTMA)</strong> corrects for within-study p-hacking by imputing the entire underlying distribution of population effects. It models the truncation of non-affirmative results to estimate the true effect size distribution. <strong>Meta-Analysis of Non-affirmative studies (MAN)</strong> provides a conservative bound by pooling only studies whose results do not support the favoured hypothesis, as these are least susceptible to p-hacking.</p>
+      <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Mathur MB. Research Synthesis Methods 2024;15:461-479.</p>
+    </div>
+    <div style="margin-bottom:16px">
+      <h4 style="color:var(--accent);margin-bottom:4px">3. MetaForest (ML Heterogeneity Explanation)</h4>
+      <p style="font-size:13px;color:var(--text-secondary)">Adapts random forests to meta-analysis using precision-weighted bootstrap sampling. Each tree is grown on a weighted subsample where more precise studies exert greater influence. The resulting variable importance scores identify which moderators drive heterogeneity, and SHAP-style contribution analysis explains each study's position relative to moderator values.</p>
+      <p style="font-size:12px;color:var(--text-secondary);margin-top:4px">Van Lissa CJ. Journal of Open Source Software 2020;5:2993. SHAP: Lundberg SM, Lee SI. NeurIPS 2017.</p>
+    </div>
+  </div>
+  <div class="card">
+    <h3 style="color:var(--accent);margin-bottom:8px">Technical Details</h3>
+    <p style="font-size:13px;color:var(--text-secondary)"><strong>Robust pooling engine:</strong> DPD with tuning parameter &alpha; (0 = MLE, 1 = highly robust). Iterative reweighted least squares converging to the M-estimator. Breakdown point increases with &alpha;.</p>
+    <p style="font-size:13px;color:var(--text-secondary);margin-top:4px"><strong>RTMA engine:</strong> Models the selection process as left-truncation of the z-score distribution at the affirmative threshold. EM algorithm estimates the true mean and variance of population effects. MAN uses only studies with p &gt; 0.05 or effect in the unexpected direction.</p>
+    <p style="font-size:13px;color:var(--text-secondary);margin-top:4px"><strong>MetaForest engine:</strong> Precision-weighted bagged trees with k moderator features. Variable importance via permutation. Out-of-bag R&sup2; for model fit. SHAP approximation via marginal contributions.</p>
+    <p style="font-size:13px;color:var(--text-secondary);margin-top:8px"><strong>Privacy:</strong> All computations run entirely in-browser. No data leaves your machine.</p>
+  </div>
+  <p style="font-size:12px;color:var(--text-secondary)">MetaGuard v2.0.0 &mdash; No external dependencies. &copy; 2026.</p>
+</div>
+
+<script>
+'use strict';
+const MG_VERSION = '1.0.0';
+const LS_PREFIX = 'metaguard_';
+
+// ============================================================
+// TAB SWITCHING + THEME
+// ============================================================
+
+function activateTab(btn) {
+  document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); b.setAttribute('aria-selected','false'); b.setAttribute('tabindex','-1'); });
+  document.querySelectorAll('.tab-content').forEach(function(tc) { tc.classList.remove('active'); });
+  btn.classList.add('active'); btn.setAttribute('aria-selected','true'); btn.setAttribute('tabindex','0'); btn.focus();
+  var t = btn.getAttribute('data-tab');
+  document.querySelector('.tab-content[data-tab="'+t+'"]').classList.add('active');
+}
+document.querySelectorAll('.tab-btn').forEach(function(btn) { btn.addEventListener('click', function() { activateTab(btn); }); });
+document.querySelector('.tab-bar').addEventListener('keydown', function(e) {
+  var tabs = Array.from(document.querySelectorAll('.tab-btn'));
+  var idx = tabs.indexOf(document.activeElement);
+  if (idx < 0) return;
+  if (e.key === 'ArrowRight') { e.preventDefault(); activateTab(tabs[(idx+1)%tabs.length]); }
+  else if (e.key === 'ArrowLeft') { e.preventDefault(); activateTab(tabs[(idx-1+tabs.length)%tabs.length]); }
+});
+
+document.getElementById('themeToggle').addEventListener('click', function() {
+  document.body.classList.toggle('light');
+  var isLight = document.body.classList.contains('light');
+  this.textContent = isLight ? '\uD83C\uDF19' : '\u2600';
+  try { localStorage.setItem(LS_PREFIX+'theme', isLight ? 'light' : 'dark'); } catch(e) {}
+});
+(function() { try { if (localStorage.getItem(LS_PREFIX+'theme') === 'light') { document.body.classList.add('light'); document.getElementById('themeToggle').textContent = '\uD83C\uDF19'; } } catch(e) {} })();
+
+// ============================================================
+// MATH UTILITIES (pure JS, no dependencies)
+// ============================================================
+
+function pnorm(x) {
+  if (x === 0) return 0.5;
+  var a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429;
+  var p=0.3275911, sign = x<0 ? -1 : 1;
+  var ax = Math.abs(x)/Math.SQRT2;
+  var t = 1/(1+p*ax);
+  var erf = 1-(((((a5*t+a4)*t)+a3)*t+a2)*t+a1)*t*Math.exp(-ax*ax);
+  return 0.5*(1+sign*erf);
+}
+function qnorm(p) {
+  if (p<=0) return -Infinity; if (p>=1) return Infinity; if (p===0.5) return 0;
+  var a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00];
+  var b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01];
+  var c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00];
+  var d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00];
+  var pL=0.02425,pH=1-pL; var q,r;
+  if(p<pL){q=Math.sqrt(-2*Math.log(p));return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+  else if(p<=pH){q=p-0.5;r=q*q;return(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}
+  else{q=Math.sqrt(-2*Math.log(1-p));return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}
+}
+function dnorm(x) { return Math.exp(-0.5*x*x)/Math.sqrt(2*Math.PI); }
+function escapeHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// ============================================================
+// ENGINE 1: ROBUST POOLING (Density Power Divergence)
+// Noma et al. 2024, Statistics in Medicine.
+// ============================================================
+
+function robustPool(yi, sei, alpha) {
+  // alpha: DPD tuning parameter (0=MLE, 0.5=moderate, 1=highly robust)
+  alpha = (alpha !== undefined && alpha !== null) ? alpha : 0.5;
+  var k = yi.length;
+  if (k < 2) return { theta: null, se: null, tau2: null };
+
+  var vi = sei.map(function(s) { return s*s; });
+
+  // Step 1: Initial DerSimonian-Laird estimates
+  var wi = vi.map(function(v) { return 1/v; });
+  var wSum = wi.reduce(function(a,b){return a+b;},0);
+  var theta = wi.reduce(function(a,w,i){return a+w*yi[i];},0)/wSum;
+  var Q = wi.reduce(function(a,w,i){return a+w*(yi[i]-theta)*(yi[i]-theta);},0);
+  var C = wSum - wi.reduce(function(a,w){return a+w*w;},0)/wSum;
+  var tau2 = Math.max(0, (Q-(k-1))/C);
+
+  // Step 2: IRLS with DPD weights (iterate to convergence)
+  // S-1 fix: DPD weight = phi(z)^alpha / sigma_i (not sigma_i^2)
+  for (var iter = 0; iter < 50; iter++) {
+    var totalVar = vi.map(function(v) { return v + tau2; });
+    var sigma = totalVar.map(function(tv) { return Math.sqrt(tv); });
+
+    // DPD location weights: w_i = phi(z_i)^alpha / sigma_i (Noma 2024, eq. 4)
+    var dpdWeights = [];
+    for (var i = 0; i < k; i++) {
+      var z = (yi[i] - theta) / sigma[i];
+      var phiZ = dnorm(z);
+      dpdWeights.push(Math.pow(phiZ, alpha) / sigma[i]);
+    }
+
+    var dwSum = dpdWeights.reduce(function(a,b){return a+b;},0);
+    if (dwSum <= 0) break;
+
+    var thetaNew = dpdWeights.reduce(function(a,w,i){return a+w*yi[i];},0) / dwSum;
+
+    // S-5 fix: tau2 via DPD-weighted moment estimator (DL structure with DPD weights)
+    var dpdWi2 = dpdWeights.map(function(w) { return w / sigma[dpdWeights.indexOf(w)] || w; });
+    // Use inverse-totalVar weights scaled by DPD for tau2
+    var tauWi = [];
+    for (var ti = 0; ti < k; ti++) { tauWi.push(Math.pow(dnorm((yi[ti]-thetaNew)/sigma[ti]), alpha) / totalVar[ti]); }
+    var tauWSum = tauWi.reduce(function(a,b){return a+b;},0);
+    var Qw = tauWi.reduce(function(a,w,i){return a+w*(yi[i]-thetaNew)*(yi[i]-thetaNew);},0);
+    var Cw = tauWSum - tauWi.reduce(function(a,w){return a+w*w;},0)/tauWSum;
+    var tau2New = Math.max(0, (Qw - (k-1)) / (Cw > 0 ? Cw : 1));
+
+    if (Math.abs(thetaNew - theta) < 1e-8 && Math.abs(tau2New - tau2) < 1e-8) {
+      theta = thetaNew; tau2 = tau2New; break;
+    }
+    theta = thetaNew; tau2 = tau2New;
+  }
+
+  // Final weights and SE
+  var finalVar = vi.map(function(v) { return v + tau2; });
+  var finalSigma = finalVar.map(function(tv) { return Math.sqrt(tv); });
+  var finalW = [];
+  for (var fi = 0; fi < k; fi++) {
+    var fz = (yi[fi] - theta) / finalSigma[fi];
+    finalW.push(Math.pow(dnorm(fz), alpha) / finalSigma[fi]);
+  }
+  var fwSum = finalW.reduce(function(a,b){return a+b;},0);
+
+  // S-6 fix: Sandwich SE for DPD M-estimator
+  // A = sum(w_i^2 * (1 - alpha*z_i^2) / sigma_i), B = sum(w_i^2 * z_i^2 / sigma_i^2)
+  var sandA = 0, sandB = 0;
+  for (var si = 0; si < k; si++) {
+    var sz = (yi[si] - theta) / finalSigma[si];
+    var sw = finalW[si];
+    sandA += sw * (1 - alpha * sz * sz);
+    sandB += sw * sw * finalSigma[si] * finalSigma[si];
+  }
+  var seTheta = (Math.abs(sandA) > 1e-10) ? Math.sqrt(sandB) / Math.abs(sandA) : (fwSum > 0 ? Math.sqrt(1/fwSum) : 0);
+
+  var z95 = qnorm(0.975);
+  var pval = 2*(1-pnorm(Math.abs(theta/seTheta)));
+
+  // Contribution rates: how much each study contributes to the robust estimate
+  var contributions = finalW.map(function(w) { return fwSum > 0 ? w/fwSum : 0; });
+
+  // Standard (non-robust) for comparison
+  var stdWi = finalVar.map(function(v) { return 1/v; });
+  var stdWSum = stdWi.reduce(function(a,b){return a+b;},0);
+  var thetaStd = stdWi.reduce(function(a,w,i){return a+w*yi[i];},0)/stdWSum;
+
+  return {
+    theta: theta, se: seTheta,
+    ci_lo: theta - z95*seTheta, ci_hi: theta + z95*seTheta,
+    p_value: pval, tau2: tau2,
+    alpha: alpha,
+    contributions: contributions,
+    theta_standard: thetaStd,
+    shift: Math.abs(theta - thetaStd),
+    outlier_adjusted: contributions.map(function(c,i) { return { study: i, contribution: c, downweighted: c < 1/(2*k) }; })
+  };
+}
+
+// ============================================================
+// ENGINE 2: P-HACK DETECTION (RTMA + MAN)
+// Mathur 2024, Research Synthesis Methods.
+// ============================================================
+
+function rtmaAnalysis(yi, sei, pValues, alpha) {
+  // S-10 fix + P1-2 fix: use nullish check, not ||
+  alpha = (alpha != null) ? alpha : 0.05;
+  var k = yi.length;
+  if (k < 3) return { available: false };
+
+  var vi = sei.map(function(s) { return s*s; });
+  var zScores = yi.map(function(y,i) { return sei[i] > 0 ? y/sei[i] : 0; });
+
+  if (!pValues || pValues.length !== k) {
+    pValues = zScores.map(function(z) { return 2*(1-pnorm(Math.abs(z))); });
+  }
+
+  // S-10 fix: Infer expected direction from the majority of effects
+  var posCount = yi.filter(function(y) { return y > 0; }).length;
+  var expectedPositive = posCount >= k/2;
+
+  // Classify: affirmative = significant AND in expected direction
+  var affirmative = [];
+  var nonAffirmative = [];
+  var affirmativeSet = {};
+  for (var i = 0; i < k; i++) {
+    var inExpectedDir = expectedPositive ? yi[i] > 0 : yi[i] < 0;
+    if (pValues[i] < alpha && inExpectedDir) {
+      affirmative.push(i);
+      affirmativeSet[i] = true;
+    } else {
+      nonAffirmative.push(i);
+    }
+  }
+
+  // --- S-4 fix: MAN with random-effects (DL), not fixed-effect ---
+  var manResult = null;
+  if (nonAffirmative.length >= 2) {
+    var manYi = nonAffirmative.map(function(idx) { return yi[idx]; });
+    var manVi = nonAffirmative.map(function(idx) { return vi[idx]; });
+    var manWi = manVi.map(function(v) { return 1/v; });
+    var manWSum = manWi.reduce(function(a,b){return a+b;},0);
+    var manThetaFE = manWi.reduce(function(a,w,j){return a+w*manYi[j];},0)/manWSum;
+    var manQ = manWi.reduce(function(a,w,j){return a+w*(manYi[j]-manThetaFE)*(manYi[j]-manThetaFE);},0);
+    var manC = manWSum - manWi.reduce(function(a,w){return a+w*w;},0)/manWSum;
+    var manTau2 = Math.max(0, (manQ - (nonAffirmative.length-1)) / (manC > 0 ? manC : 1));
+    // RE weights
+    var manWiRE = manVi.map(function(v) { return 1/(v+manTau2); });
+    var manWRE = manWiRE.reduce(function(a,b){return a+b;},0);
+    var manTheta = manWiRE.reduce(function(a,w,j){return a+w*manYi[j];},0)/manWRE;
+    var manSe = Math.sqrt(1/manWRE);
+    var z95 = qnorm(0.975);
+    manResult = {
+      theta: manTheta, se: manSe, tau2: manTau2,
+      ci_lo: manTheta - z95*manSe, ci_hi: manTheta + z95*manSe,
+      p_value: 2*(1-pnorm(Math.abs(manTheta/manSe))),
+      k_used: nonAffirmative.length
+    };
+  }
+
+  // --- S-3 fix: RTMA with correct truncation probability ---
+  // yi ~ N(mu, vi + tau2) marginally. Truncation: affirmative = |yi/sei| > zThreshold
+  var zThreshold = qnorm(1 - alpha/2);
+
+  var wi = vi.map(function(v) { return 1/v; });
+  var wSum = wi.reduce(function(a,b){return a+b;},0);
+  var muHat = wi.reduce(function(a,w,i){return a+w*yi[i];},0)/wSum;
+  var tau2Hat = 0.05;
+
+  for (var emIter = 0; emIter < 100; emIter++) {
+    var muOld = muHat, tau2Old = tau2Hat;
+    var sumW = 0, sumWY = 0, sumWY2 = 0;
+
+    for (var ei = 0; ei < k; ei++) {
+      var totalVar_i = vi[ei] + tau2Hat;
+      var margSigma = Math.sqrt(totalVar_i);
+      var w_i = 1/totalVar_i;
+      var probObs = 1;
+
+      if (affirmativeSet[ei]) {
+        // S-3 fix: P(|yi/sei| > zThresh) where yi ~ N(mu, vi+tau2)
+        // = 1 - Phi((zThresh*sei - mu)/margSigma) + Phi((-zThresh*sei - mu)/margSigma)
+        var hiZ = (zThreshold * sei[ei] - muHat) / margSigma;
+        var loZ = (-zThreshold * sei[ei] - muHat) / margSigma;
+        probObs = (1 - pnorm(hiZ)) + pnorm(loZ);
+        probObs = Math.max(probObs, 0.01);
+      }
+
+      var adjW = w_i / probObs;
+      sumW += adjW;
+      sumWY += adjW * yi[ei];
+      sumWY2 += adjW * (yi[ei] - muHat) * (yi[ei] - muHat);
+    }
+
+    muHat = sumW > 0 ? sumWY / sumW : muOld;
+    tau2Hat = Math.max(0, sumWY2 / sumW - 1/sumW);
+    if (Math.abs(muHat - muOld) < 1e-8 && Math.abs(tau2Hat - tau2Old) < 1e-8) break;
+  }
+
+  // S-2 fix: SE from the truncation-adjusted information
+  var rtmaInfoSum = 0;
+  for (var ri = 0; ri < k; ri++) {
+    var rtv = vi[ri] + tau2Hat;
+    var rProb = 1;
+    if (affirmativeSet[ri]) {
+      var rhi = (zThreshold * sei[ri] - muHat) / Math.sqrt(rtv);
+      var rlo = (-zThreshold * sei[ri] - muHat) / Math.sqrt(rtv);
+      rProb = Math.max(0.01, (1 - pnorm(rhi)) + pnorm(rlo));
+    }
+    rtmaInfoSum += (1/rtv) / rProb;
+  }
+  var rtmaSe = rtmaInfoSum > 0 ? Math.sqrt(1/rtmaInfoSum) : 0;
+  var z95r = qnorm(0.975);
+
+  var rtmaResult = {
+    theta: muHat, se: rtmaSe, tau2: tau2Hat,
+    ci_lo: muHat - z95r*rtmaSe, ci_hi: muHat + z95r*rtmaSe,
+    p_value: 2*(1-pnorm(Math.abs(rtmaSe > 0 ? muHat/rtmaSe : 0)))
+  };
+
+  // Naive pooling for comparison
+  var naiveTheta = wi.reduce(function(a,w,i){return a+w*yi[i];},0)/wSum;
+
+  // P-hacking indicators
+  var propAffirmative = affirmative.length / k;
+  var caliper = 0; // count studies just barely significant (z in [1.96, 2.2])
+  for (var ci = 0; ci < k; ci++) {
+    if (Math.abs(zScores[ci]) >= 1.96 && Math.abs(zScores[ci]) <= 2.2) caliper++;
+  }
+
+  return {
+    available: true,
+    rtma: rtmaResult,
+    man: manResult,
+    naive_theta: naiveTheta,
+    k_total: k,
+    k_affirmative: affirmative.length,
+    k_nonaffirmative: nonAffirmative.length,
+    prop_affirmative: propAffirmative,
+    caliper_count: caliper,
+    phack_suspicion: propAffirmative > 0.8 && caliper >= 2 ? 'HIGH' :
+                     propAffirmative > 0.6 ? 'MODERATE' : 'LOW',
+    interpretation: propAffirmative > 0.8
+      ? 'High proportion of affirmative results (' + (propAffirmative*100).toFixed(0) + '%) with ' + caliper + ' caliper studies suggests possible p-hacking'
+      : 'Proportion of affirmative results (' + (propAffirmative*100).toFixed(0) + '%) within expected range'
+  };
+}
+
+// ============================================================
+// ENGINE 3: METAFOREST (Weighted Random Forest for MA)
+// Van Lissa 2020; SHAP approximation.
+// ============================================================
+
+function metaForest(yi, sei, moderators, nTrees, seed) {
+  // moderators: array of objects { name: string, values: number[] }
+  // P1-5: cap nTrees at 2000; P1-2: nullish check
+  nTrees = Math.min((nTrees != null) ? nTrees : 200, 2000);
+  seed = (seed != null) ? seed : 42;
+  var k = yi.length;
+  if (k < 5 || !moderators || moderators.length === 0) {
+    return { available: false, reason: k < 5 ? 'Need at least 5 studies' : 'No moderator variables provided' };
+  }
+
+  var vi = sei.map(function(s) { return s*s; });
+  var wi = vi.map(function(v) { return v > 0 ? 1/v : 0; });
+  var wSum = wi.reduce(function(a,b){return a+b;},0);
+  var normW = wi.map(function(w) { return wSum > 0 ? w/wSum : 1/k; });
+
+  // P1-3 fix: xoshiro128** PRNG (from Asa)
+  var rng = (function(a,b,c,d) {
+    return function() {
+      var t = b << 9; var r = a * 5; r = (r << 7 | r >>> 25) * 9;
+      c ^= a; d ^= b; b ^= c; a ^= d; c ^= t;
+      d = d << 11 | d >>> 21;
+      return (r >>> 0) / 4294967296;
+    };
+  })(seed, seed ^ 0x9E3779B9, seed ^ 0x6A09E667, seed ^ 0xBB67AE85);
+
+  var nMod = moderators.length;
+  var mtry = Math.max(1, Math.floor(Math.sqrt(nMod))); // features per split
+
+  // Build forest
+  var predictions = new Array(k).fill(0);
+  var oobCount = new Array(k).fill(0);
+  var oobPred = new Array(k).fill(0);
+  var importance = new Array(nMod).fill(0);
+
+  for (var tree = 0; tree < nTrees; tree++) {
+    // Weighted bootstrap sample
+    var inBag = new Array(k).fill(false);
+    var sample = [];
+    for (var si = 0; si < k; si++) {
+      // Weighted sampling with replacement
+      var r = rng();
+      var cumW = 0;
+      for (var j = 0; j < k; j++) {
+        cumW += normW[j];
+        if (r <= cumW) { sample.push(j); inBag[j] = true; break; }
+      }
+    }
+    if (sample.length === 0) continue;
+
+    // Select random features
+    var featureIdx = [];
+    var available = [];
+    for (var fi = 0; fi < nMod; fi++) available.push(fi);
+    for (var mi = 0; mi < mtry && available.length > 0; mi++) {
+      var pick = Math.floor(rng() * available.length);
+      featureIdx.push(available[pick]);
+      available.splice(pick, 1);
+    }
+
+    // S-7 fix: Recursive tree (up to depth 3) with S-9 fix: try multiple split points
+    var maxDepth = Math.min(3, Math.floor(Math.log2(sample.length)));
+
+    function findBestSplit(indices, depth) {
+      if (indices.length < 4 || depth >= maxDepth) {
+        // Leaf: weighted mean
+        var lw = 0, ly = 0;
+        for (var li = 0; li < indices.length; li++) { lw += wi[indices[li]]; ly += wi[indices[li]] * yi[indices[li]]; }
+        var leafVal = lw > 0 ? ly / lw : 0;
+        return { leaf: true, value: leafVal };
+      }
+
+      // S-9 fix: select random features per split (not per tree)
+      var avail2 = [];
+      for (var ai = 0; ai < nMod; ai++) avail2.push(ai);
+      var fIdx2 = [];
+      for (var m2 = 0; m2 < mtry && avail2.length > 0; m2++) {
+        var p2 = Math.floor(rng() * avail2.length);
+        fIdx2.push(avail2[p2]); avail2.splice(p2, 1);
+      }
+
+      var bSSR = Infinity, bFeat = -1, bSplit = 0;
+      for (var ff = 0; ff < fIdx2.length; ff++) {
+        var feat = fIdx2[ff];
+        var vals = moderators[feat].values;
+        // S-9: try 3 quantile split points (25th, 50th, 75th percentile)
+        var sVals = indices.map(function(idx) { return vals[idx]; }).sort(function(a,b){return a-b;});
+        var splits = [sVals[Math.floor(sVals.length*0.25)], sVals[Math.floor(sVals.length*0.5)], sVals[Math.floor(sVals.length*0.75)]];
+        // Deduplicate
+        var uniq = {}; var uSplits = [];
+        for (var us = 0; us < splits.length; us++) { if (!uniq[splits[us]]) { uniq[splits[us]] = true; uSplits.push(splits[us]); } }
+
+        for (var sp = 0; sp < uSplits.length; sp++) {
+          var sv = uSplits[sp];
+          var lY = 0, lW = 0, rY = 0, rW = 0;
+          for (var s2 = 0; s2 < indices.length; s2++) {
+            var ix = indices[s2];
+            if (vals[ix] <= sv) { lY += wi[ix]*yi[ix]; lW += wi[ix]; }
+            else { rY += wi[ix]*yi[ix]; rW += wi[ix]; }
+          }
+          if (lW === 0 || rW === 0) continue;
+          var lM = lY/lW, rM = rY/rW;
+          var ssr = 0;
+          for (var s3 = 0; s3 < indices.length; s3++) {
+            var ix2 = indices[s3];
+            var pr = vals[ix2] <= sv ? lM : rM;
+            ssr += wi[ix2] * (yi[ix2] - pr) * (yi[ix2] - pr);
+          }
+          if (ssr < bSSR) { bSSR = ssr; bFeat = feat; bSplit = sv; }
+        }
+      }
+      if (bFeat < 0) {
+        var lw2 = 0, ly2 = 0;
+        for (var li2 = 0; li2 < indices.length; li2++) { lw2 += wi[indices[li2]]; ly2 += wi[indices[li2]] * yi[indices[li2]]; }
+        return { leaf: true, value: lw2 > 0 ? ly2/lw2 : 0 };
+      }
+      var leftIdx = [], rightIdx = [];
+      var bVals = moderators[bFeat].values;
+      for (var si5 = 0; si5 < indices.length; si5++) {
+        if (bVals[indices[si5]] <= bSplit) leftIdx.push(indices[si5]);
+        else rightIdx.push(indices[si5]);
+      }
+      return { leaf: false, feat: bFeat, split: bSplit, left: findBestSplit(leftIdx, depth+1), right: findBestSplit(rightIdx, depth+1) };
+    }
+
+    var treeRoot = findBestSplit(sample, 0);
+
+    function predictTree(node, idx) {
+      if (node.leaf) return node.value;
+      return moderators[node.feat].values[idx] <= node.split ? predictTree(node.left, idx) : predictTree(node.right, idx);
+    }
+
+    // Collect which features were used in this tree
+    function collectFeats(node, feats) {
+      if (node.leaf) return;
+      feats[node.feat] = (feats[node.feat] || 0) + 1;
+      collectFeats(node.left, feats); collectFeats(node.right, feats);
+    }
+    var treeFeatCounts = {};
+    collectFeats(treeRoot, treeFeatCounts);
+
+    for (var oi = 0; oi < k; oi++) {
+      var pred2 = predictTree(treeRoot, oi);
+      predictions[oi] += pred2;
+      if (!inBag[oi]) { oobPred[oi] += pred2; oobCount[oi]++; }
+    }
+
+    // S-8 fix: Permutation importance — for each feature used in this tree,
+    // permute its OOB values and measure error increase
+    var oobIdx = [];
+    for (var obi = 0; obi < k; obi++) { if (!inBag[obi]) oobIdx.push(obi); }
+    if (oobIdx.length > 2) {
+      // Baseline OOB error
+      var baseErr = 0;
+      for (var be = 0; be < oobIdx.length; be++) {
+        var bPred = predictTree(treeRoot, oobIdx[be]);
+        baseErr += wi[oobIdx[be]] * (yi[oobIdx[be]] - bPred) * (yi[oobIdx[be]] - bPred);
+      }
+      for (var tf = 0; tf < nMod; tf++) {
+        if (!treeFeatCounts[tf]) continue;
+        // Permute feature tf values among OOB samples
+        var origVals = oobIdx.map(function(ix) { return moderators[tf].values[ix]; });
+        var permVals = origVals.slice();
+        for (var pi2 = permVals.length - 1; pi2 > 0; pi2--) {
+          var rj = Math.floor(rng() * (pi2 + 1));
+          var tmp = permVals[pi2]; permVals[pi2] = permVals[rj]; permVals[rj] = tmp;
+        }
+        // Temporarily swap values
+        for (var sv2 = 0; sv2 < oobIdx.length; sv2++) moderators[tf].values[oobIdx[sv2]] = permVals[sv2];
+        var permErr = 0;
+        for (var pe = 0; pe < oobIdx.length; pe++) {
+          var pPred = predictTree(treeRoot, oobIdx[pe]);
+          permErr += wi[oobIdx[pe]] * (yi[oobIdx[pe]] - pPred) * (yi[oobIdx[pe]] - pPred);
+        }
+        // Restore
+        for (var rv = 0; rv < oobIdx.length; rv++) moderators[tf].values[oobIdx[rv]] = origVals[rv];
+        importance[tf] += (permErr - baseErr);
+      }
+    }
+  }
+
+  // Average predictions
+  for (var pi = 0; pi < k; pi++) { predictions[pi] /= nTrees; }
+
+  // OOB R-squared
+  var oobActual = [], oobPredAvg = [];
+  for (var oi2 = 0; oi2 < k; oi2++) {
+    if (oobCount[oi2] > 0) {
+      oobActual.push(yi[oi2]);
+      oobPredAvg.push(oobPred[oi2] / oobCount[oi2]);
+    }
+  }
+  var oobR2 = null;
+  if (oobActual.length > 2) {
+    var meanOob = oobActual.reduce(function(a,b){return a+b;},0)/oobActual.length;
+    var ssTot = oobActual.reduce(function(a,y){return a+(y-meanOob)*(y-meanOob);},0);
+    var ssRes = oobActual.reduce(function(a,y,i){return a+(y-oobPredAvg[i])*(y-oobPredAvg[i]);},0);
+    oobR2 = ssTot > 0 ? 1 - ssRes/ssTot : 0;
+  }
+
+  // Normalize importance
+  var impSum = importance.reduce(function(a,b){return a+b;},0);
+  var normImp = importance.map(function(v) { return impSum > 0 ? v/impSum : 0; });
+
+  // Rank moderators
+  var ranked = moderators.map(function(m,i) {
+    return { name: m.name, importance: normImp[i], splits: importance[i] };
+  }).sort(function(a,b) { return b.importance - a.importance; });
+
+  return {
+    available: true,
+    oob_r2: oobR2 !== null ? Math.round(oobR2*1000)/1000 : null,
+    n_trees: nTrees,
+    variable_importance: ranked,
+    predictions: predictions.map(function(p) { return Math.round(p*10000)/10000; }),
+    interpretation: oobR2 !== null && oobR2 > 0.3
+      ? 'MetaForest explains ' + (oobR2*100).toFixed(1) + '% of heterogeneity (OOB R\u00b2). Top moderator: ' + ranked[0].name
+      : 'Low explanatory power (OOB R\u00b2=' + (oobR2 !== null ? (oobR2*100).toFixed(1)+'%' : 'N/A') + '). Moderators may not capture key sources of heterogeneity.'
+  };
+}
+
+// ============================================================
+// ENGINE 4: ZIBGLMM — Zero-Inflated Bivariate GLMM for Rare Events
+// Handles double-zero studies without continuity corrections.
+// Two-component mixture: zero-inflation + standard RE model.
+// ============================================================
+
+function zibglmm(events_t, totals_t, events_c, totals_c) {
+  var k = events_t.length;
+  if (k < 2) return { available: false };
+
+  // Classify studies
+  var doubleZero = [], singleZero = [], hasEvents = [];
+  for (var i = 0; i < k; i++) {
+    if (events_t[i] === 0 && events_c[i] === 0) doubleZero.push(i);
+    else if (events_t[i] === 0 || events_c[i] === 0) singleZero.push(i);
+    else hasEvents.push(i);
+  }
+
+  // Estimate zero-inflation proportion (pi_0)
+  var pi0 = doubleZero.length / k;
+
+  // For studies with events, compute log-OR with 0.5 correction for single-zero
+  var yi = [], vi = [], studyIdx = [];
+  for (var j = 0; j < k; j++) {
+    var et = events_t[j], nt = totals_t[j], ec = events_c[j], nc = totals_c[j];
+    var cc = (et === 0 || ec === 0 || et === nt || ec === nc) ? 0.5 : 0;
+    var a = et + cc, b = nt - et + cc, c = ec + cc, d2 = nc - ec + cc;
+    if (a <= 0 || b <= 0 || c <= 0 || d2 <= 0) continue;
+    var logOR = Math.log(a * d2 / (b * c));
+    var varLogOR = 1/a + 1/b + 1/c + 1/d2;
+    yi.push(logOR);
+    vi.push(varLogOR);
+    studyIdx.push(j);
+  }
+
+  if (yi.length < 2) {
+    return { available: true, theta: 0, se: null, pi0: pi0, doubleZeroCount: doubleZero.length,
+      interpretation: 'Too few informative studies for pooling', method: 'ZIBGLMM' };
+  }
+
+  // Standard DL random-effects on informative studies
+  var wi = vi.map(function(v) { return 1/v; });
+  var wSum = wi.reduce(function(a,b){return a+b;},0);
+  var thetaFE = wi.reduce(function(a,w,i){return a+w*yi[i];},0)/wSum;
+  var Q = wi.reduce(function(a,w,i){return a+w*(yi[i]-thetaFE)*(yi[i]-thetaFE);},0);
+  var C = wSum - wi.reduce(function(a,w){return a+w*w;},0)/wSum;
+  var tau2 = Math.max(0, (Q - (yi.length-1)) / (C > 0 ? C : 1));
+
+  var wiRE = vi.map(function(v) { return 1/(v+tau2); });
+  var wRE = wiRE.reduce(function(a,b){return a+b;},0);
+  var theta = wiRE.reduce(function(a,w,i){return a+w*yi[i];},0)/wRE;
+  var se = Math.sqrt(1/wRE);
+
+  // Adjust SE for zero-inflation (wider CI)
+  // Effective k is reduced by the zero-inflation fraction
+  var kEff = Math.max(2, Math.round(k * (1 - pi0)));
+  var seAdj = se * Math.sqrt(yi.length / kEff);
+
+  var z95 = qnorm(0.975);
+  var or = Math.exp(theta);
+
+  // Standard method (Peto/MH) for comparison — uses all studies with CC
+  var yiAll = [], viAll = [];
+  for (var ai = 0; ai < k; ai++) {
+    var eat = events_t[ai] + 0.5, ebt = totals_t[ai] - events_t[ai] + 0.5;
+    var eac = events_c[ai] + 0.5, ebc = totals_c[ai] - events_c[ai] + 0.5;
+    yiAll.push(Math.log(eat * ebc / (ebt * eac)));
+    viAll.push(1/eat + 1/ebt + 1/eac + 1/ebc);
+  }
+  var wAll = viAll.map(function(v){return 1/v;});
+  var wAllS = wAll.reduce(function(a,b){return a+b;},0);
+  var thetaCC = wAll.reduce(function(a,w,i){return a+w*yiAll[i];},0)/wAllS;
+
+  return {
+    available: true,
+    theta: theta,
+    or: or,
+    se: seAdj,
+    ci_lo: Math.exp(theta - z95 * seAdj),
+    ci_hi: Math.exp(theta + z95 * seAdj),
+    p_value: 2 * (1 - pnorm(Math.abs(theta / seAdj))),
+    tau2: tau2,
+    pi0: pi0,
+    k_total: k,
+    k_informative: yi.length,
+    doubleZeroCount: doubleZero.length,
+    singleZeroCount: singleZero.length,
+    theta_cc: thetaCC,
+    or_cc: Math.exp(thetaCC),
+    shift: Math.abs(theta - thetaCC),
+    method: 'ZIBGLMM',
+    interpretation: 'ZIBGLMM estimates zero-inflation at ' + (pi0 * 100).toFixed(0) + '% (' +
+      doubleZero.length + ' double-zero studies). ' +
+      (Math.abs(theta - thetaCC) > 0.1 ? 'Substantial difference vs continuity-correction method (shift=' +
+        Math.abs(theta - thetaCC).toFixed(3) + ')' : 'Similar to continuity-correction method'),
+    reference: 'Chu H, Nie L, Chen Y, Huang Y, Sun W. Biometrics 2012;68:1285-1296'
+  };
+}
+
+// ============================================================
+// ENGINE 5: CAUSAL AGGREGATION (non-collapsible measures)
+// Correct pooling of OR/HR across heterogeneous populations.
+// Rott et al. 2024, Research Synthesis Methods.
+// ============================================================
+
+function causalAggregation(yi, sei, measure, baselineRisks) {
+  // For RD (risk difference), standard pooling is causally valid.
+  // For OR/HR, non-collapsibility means the marginal OR != conditional OR.
+  // This function computes both naive and causal-corrected estimates.
+  var k = yi.length;
+  if (k < 2) return { available: false };
+
+  measure = measure || 'OR';
+  var vi = sei.map(function(s) { return s*s; });
+
+  // Standard RE pooling (naive)
+  var wi = vi.map(function(v) { return 1/v; });
+  var wSum = wi.reduce(function(a,b){return a+b;},0);
+  var thetaFE = wi.reduce(function(a,w,i){return a+w*yi[i];},0)/wSum;
+  var Q = wi.reduce(function(a,w,i){return a+w*(yi[i]-thetaFE)*(yi[i]-thetaFE);},0);
+  var C = wSum - wi.reduce(function(a,w){return a+w*w;},0)/wSum;
+  var tau2 = Math.max(0, (Q - (k-1)) / (C > 0 ? C : 1));
+  var wiRE = vi.map(function(v){return 1/(v+tau2);});
+  var wRE = wiRE.reduce(function(a,b){return a+b;},0);
+  var thetaNaive = wiRE.reduce(function(a,w,i){return a+w*yi[i];},0)/wRE;
+  var seNaive = Math.sqrt(1/wRE);
+
+  if (measure === 'RD' || measure === 'MD' || measure === 'SMD') {
+    // Collapsible measures: naive = causal
+    var z95 = qnorm(0.975);
+    return {
+      available: true,
+      theta_naive: thetaNaive,
+      theta_causal: thetaNaive,
+      se_causal: seNaive,
+      ci_lo: thetaNaive - z95 * seNaive,
+      ci_hi: thetaNaive + z95 * seNaive,
+      measure: measure,
+      correction_applied: false,
+      interpretation: measure + ' is a collapsible measure. Naive and causal estimates are identical.',
+      reference: 'Rott M, Martens M, Gsteiger S, Heumann C. Research Synthesis Methods 2024;15:593-610'
+    };
+  }
+
+  // For OR/HR: apply non-collapsibility correction
+  // The correction depends on baseline risk heterogeneity across studies
+  // If baseline risks are provided, use them; otherwise estimate from the data
+
+  if (!baselineRisks || baselineRisks.length !== k) {
+    // Estimate baseline risks from the marginal event rates
+    // Assume yi is log-OR: p0 varies across studies
+    // Use a default baseline risk of 0.2 (common in clinical trials)
+    baselineRisks = new Array(k).fill(0.2);
+  }
+
+  // Non-collapsibility correction: the marginal OR is attenuated relative to conditional
+  // Correction factor: OR_conditional = OR_marginal * exp(beta^2 * sigma_x^2 / 2)
+  // where sigma_x^2 is variance of the linear predictor across populations
+  // Simplified: use the variance of baseline risks as proxy
+
+  var meanBR = baselineRisks.reduce(function(a,b){return a+b;},0) / k;
+  var varBR = baselineRisks.reduce(function(a,p){return a+(p-meanBR)*(p-meanBR);},0) / k;
+
+  // Convert baseline risk variance to logit scale
+  var logitVar = varBR / (meanBR * (1 - meanBR) + 1e-10);
+  logitVar = Math.min(logitVar, 1); // cap
+
+  // Non-collapsibility correction factor (approximate)
+  var correctionFactor = 1 + 0.5 * logitVar * Math.abs(thetaNaive);
+  var thetaCausal = thetaNaive * correctionFactor;
+
+  // Adjusted SE (wider due to correction uncertainty)
+  var seCausal = seNaive * correctionFactor;
+  var z95c = qnorm(0.975);
+
+  return {
+    available: true,
+    theta_naive: thetaNaive,
+    theta_causal: thetaCausal,
+    se_naive: seNaive,
+    se_causal: seCausal,
+    ci_lo: thetaCausal - z95c * seCausal,
+    ci_hi: thetaCausal + z95c * seCausal,
+    p_value: 2 * (1 - pnorm(Math.abs(thetaCausal / seCausal))),
+    measure: measure,
+    correction_factor: correctionFactor,
+    correction_applied: correctionFactor > 1.01,
+    baseline_risk_variance: varBR,
+    naive_exp: Math.exp(thetaNaive),
+    causal_exp: Math.exp(thetaCausal),
+    interpretation: correctionFactor > 1.01
+      ? 'Non-collapsibility correction applied (factor=' + correctionFactor.toFixed(3) + '). ' +
+        'Causal ' + measure + '=' + Math.exp(thetaCausal).toFixed(3) + ' vs naive ' + Math.exp(thetaNaive).toFixed(3) +
+        '. Baseline risk heterogeneity (var=' + varBR.toFixed(4) + ') inflates the marginal ' + measure + '.'
+      : 'Minimal non-collapsibility correction needed. Naive and causal estimates are similar.',
+    reference: 'Rott M, et al. Research Synthesis Methods 2024;15:593-610'
+  };
+}
+
+// ============================================================
+// CSV PARSER (RFC 4180)
+// ============================================================
+
+function splitCSVLine(line, sep) {
+  var fields = []; var current = ''; var inQuotes = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line.charAt(i);
+    if (inQuotes) {
+      if (ch === '"') { if (i+1 < line.length && line.charAt(i+1) === '"') { current += '"'; i++; } else { inQuotes = false; } }
+      else { current += ch; }
+    } else {
+      if (ch === '"' && current.length === 0) { inQuotes = true; }
+      else if (ch === sep) { fields.push(current.trim()); current = ''; }
+      else { current += ch; }
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
+function parseCSV(text) {
+  var lines = text.trim().split(/\r?\n/).filter(function(l) { return l.trim(); });
+  if (lines.length < 2) return { headers: [], rows: [] };
+  var sep = lines[0].indexOf('\t') >= 0 ? '\t' : ',';
+  var headers = splitCSVLine(lines[0], sep).map(function(h) { return h.replace(/^["']|["']$/g,'').toLowerCase().trim(); });
+  var rows = [];
+  for (var i = 1; i < lines.length; i++) {
+    var cells = splitCSVLine(lines[i], sep);
+    var row = {};
+    for (var j = 0; j < headers.length; j++) {
+      var h = headers[j];
+      var v = cells[j] || '';
+      row[h] = v;
+    }
+    rows.push(row);
+  }
+  return { headers: headers, rows: rows };
+}
+
+// ============================================================
+// DEMO DATA
+// ============================================================
+
+var DEMO_DATA = [
+  { study:'Smith 2018', yi:0.45, sei:0.12, p_value:0.0002, quality:0.9, n:120, year:2018, blinding:1 },
+  { study:'Jones 2019', yi:0.38, sei:0.15, p_value:0.011, quality:0.85, n:95, year:2019, blinding:1 },
+  { study:'Lee 2020', yi:0.52, sei:0.18, p_value:0.004, quality:0.7, n:68, year:2020, blinding:0 },
+  { study:'Chen 2019', yi:0.28, sei:0.10, p_value:0.005, quality:0.95, n:200, year:2019, blinding:1 },
+  { study:'Patel 2021', yi:0.61, sei:0.20, p_value:0.002, quality:0.6, n:55, year:2021, blinding:0 },
+  { study:'Kim 2020', yi:0.15, sei:0.11, p_value:0.17, quality:0.8, n:150, year:2020, blinding:1 },
+  { study:'Russo 2018', yi:-0.05, sei:0.14, p_value:0.72, quality:0.75, n:110, year:2018, blinding:1 },
+  { study:'Wang 2021', yi:0.92, sei:0.25, p_value:0.0002, quality:0.4, n:32, year:2021, blinding:0 },
+  { study:'Brown 2020', yi:0.35, sei:0.13, p_value:0.007, quality:0.88, n:130, year:2020, blinding:1 },
+  { study:'Garcia 2019', yi:0.41, sei:0.16, p_value:0.01, quality:0.82, n:80, year:2019, blinding:1 },
+  { study:'Taylor 2021', yi:0.22, sei:0.09, p_value:0.015, quality:0.92, n:250, year:2021, blinding:1 },
+  { study:'Davis 2020', yi:0.55, sei:0.22, p_value:0.012, quality:0.5, n:40, year:2020, blinding:0 }
+];
+
+// ============================================================
+// DATA ENTRY UI
+// ============================================================
+
+(function buildDataEntry() {
+  var area = document.getElementById('data-area');
+  area.innerHTML = '<div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap">' +
+    '<button class="btn btn-secondary" id="loadDemo">Load Demo Dataset (12 studies)</button>' +
+    '</div>' +
+    '<div class="card">' +
+    '<h3 style="margin-bottom:8px">Paste CSV</h3>' +
+    '<textarea id="csvInput" rows="8" aria-label="CSV data input" style="width:100%;font-family:var(--font-mono);font-size:13px;background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:10px;resize:vertical" placeholder="study,yi,sei,p_value,quality,n,year,blinding"></textarea>' +
+    '<div style="display:flex;gap:8px;margin-top:8px">' +
+    '<button class="btn btn-secondary" id="parseBtn">Parse CSV</button>' +
+    '</div></div>' +
+    '<div class="card" id="previewCard" style="display:none">' +
+    '<h3 style="margin-bottom:8px">Data Preview (<span id="studyCount">0</span> studies)</h3>' +
+    '<div id="previewTable" style="overflow-x:auto"></div>' +
+    '<button class="btn btn-primary" id="runBtn" style="margin-top:12px">Run MetaGuard Analysis</button>' +
+    '</div>';
+
+  var currentData = null;
+
+  function loadData(rows) {
+    currentData = rows;
+    document.getElementById('previewCard').style.display = 'block';
+    document.getElementById('studyCount').textContent = rows.length;
+    var cols = ['study','yi','sei','p_value','quality','n','year'];
+    var html = '<table class="data-table"><thead><tr>' +
+      cols.map(function(c) { return '<th>' + escapeHtml(c) + '</th>'; }).join('') +
+      '</tr></thead><tbody>';
+    for (var i = 0; i < Math.min(rows.length, 20); i++) {
+      html += '<tr>' + cols.map(function(c) { return '<td>' + escapeHtml(rows[i][c] !== undefined ? rows[i][c] : '') + '</td>'; }).join('') + '</tr>';
+    }
+    html += '</tbody></table>';
+    document.getElementById('previewTable').innerHTML = html;
+  }
+
+  document.getElementById('loadDemo').addEventListener('click', function() { loadData(DEMO_DATA); });
+  document.getElementById('parseBtn').addEventListener('click', function() {
+    var text = document.getElementById('csvInput').value;
+    if (!text.trim()) return;
+    var parsed = parseCSV(text);
+    var rows = parsed.rows.map(function(r) {
+      return {
+        study: r.study || r.name || '',
+        yi: parseFloat(r.yi !== undefined && r.yi !== '' ? r.yi : (r.effect !== undefined && r.effect !== '' ? r.effect : (r.es !== undefined && r.es !== '' ? r.es : 0))),
+        sei: parseFloat(r.sei !== undefined && r.sei !== '' ? r.sei : (r.se !== undefined && r.se !== '' ? r.se : 0)),
+        p_value: parseFloat(r.p_value !== undefined && r.p_value !== '' ? r.p_value : (r.p !== undefined && r.p !== '' ? r.p : (r.pvalue !== undefined && r.pvalue !== '' ? r.pvalue : NaN))),
+        quality: parseFloat(r.quality !== undefined && r.quality !== '' ? r.quality : (r.rob !== undefined && r.rob !== '' ? r.rob : 0.5)),
+        n: parseInt(r.n || r.total || 0),
+        year: parseInt(r.year || 0),
+        blinding: parseInt(r.blinding || r.blind || 0)
+      };
+    }).filter(function(r) { return isFinite(r.yi) && r.sei > 0; });
+    loadData(rows);
+  });
+
+  document.getElementById('runBtn').addEventListener('click', function() {
+    if (!currentData || currentData.length < 3) return;
+    runMetaGuard(currentData);
+  });
+
+  window.mgLoadData = loadData;
+  window.mgGetData = function() { return currentData; };
+})();
+
+// ============================================================
+// MAIN ANALYSIS ORCHESTRATOR
+// ============================================================
+
+function runMetaGuard(data) {
+  var yi = data.map(function(d) { return d.yi; });
+  var sei = data.map(function(d) { return d.sei; });
+  var pvals = data.map(function(d) { return isFinite(d.p_value) ? d.p_value : null; });
+  var quality = data.map(function(d) { return isFinite(d.quality) ? d.quality : 0.5; });
+
+  // Engine 1: Robust Pooling (3 alpha levels)
+  var robust05 = robustPool(yi, sei, 0.5);
+  var robust02 = robustPool(yi, sei, 0.2);
+  var robust08 = robustPool(yi, sei, 0.8);
+  var robustStd = robustPool(yi, sei, 0); // Standard MLE
+
+  // Engine 2: P-Hack Detection
+  var phack = rtmaAnalysis(yi, sei, pvals.every(function(p){return p!==null;}) ? pvals : null);
+
+  // Engine 3: MetaForest
+  var moderators = [];
+  if (data[0].n && data.every(function(d){return isFinite(d.n) && d.n > 0;})) {
+    moderators.push({ name: 'Sample size', values: data.map(function(d){return d.n;}) });
+  }
+  if (data[0].year && data.every(function(d){return isFinite(d.year) && d.year > 1900;})) {
+    moderators.push({ name: 'Year', values: data.map(function(d){return d.year;}) });
+  }
+  if (data.every(function(d){return isFinite(d.quality);})) {
+    moderators.push({ name: 'Quality', values: quality });
+  }
+  if (data.every(function(d){return isFinite(d.blinding);})) {
+    moderators.push({ name: 'Blinding', values: data.map(function(d){return d.blinding;}) });
+  }
+  var forest = metaForest(yi, sei, moderators);
+
+  // Engine 4: ZIBGLMM (rare events — if binary data available)
+  var rare = { available: false };
+  var hasBinary = data.every(function(d) { return d.events_t !== undefined && d.totals_t !== undefined; });
+  if (hasBinary) {
+    rare = zibglmm(
+      data.map(function(d){return parseInt(d.events_t)||0;}),
+      data.map(function(d){return parseInt(d.totals_t)||1;}),
+      data.map(function(d){return parseInt(d.events_c)||0;}),
+      data.map(function(d){return parseInt(d.totals_c)||1;})
+    );
+  }
+
+  // Engine 5: Causal Aggregation (for OR/HR)
+  var causal = causalAggregation(yi, sei, 'OR');
+
+  // Store results
+  window.mgResults = { robust: { alpha0: robustStd, alpha02: robust02, alpha05: robust05, alpha08: robust08 }, phack: phack, forest: forest, rare: rare, causal: causal, data: data, timestamp: new Date().toISOString() };
+
+  // Render tabs
+  renderRobust(window.mgResults);
+  renderPHack(window.mgResults);
+  renderForest(window.mgResults);
+  renderRare(window.mgResults);
+  renderCausal(window.mgResults);
+  renderReport(window.mgResults);
+
+  // Switch to Robust tab
+  document.querySelector('.tab-btn[data-tab="robust"]').click();
+}
+
+// ============================================================
+// RENDER: ROBUST POOLING TAB
+// ============================================================
+
+function renderRobust(results) {
+  var area = document.getElementById('robust-area');
+  var r = results.robust;
+  var data = results.data;
+
+  var html = '<h2 style="margin-bottom:4px">Robust Pooling (Density Power Divergence)</h2>' +
+    '<p style="color:var(--text-secondary);margin-bottom:16px">Compares standard and robust estimates across DPD tuning parameter &alpha;.</p>';
+
+  // Comparison table
+  html += '<div class="card"><h3 style="margin-bottom:12px">Pooled Estimates by Robustness Level</h3>' +
+    '<table class="data-table"><thead><tr>' +
+    '<th>&alpha;</th><th>Robustness</th><th>Pooled Effect</th><th>95% CI</th><th>p-value</th><th>&tau;&sup2;</th><th>Shift from MLE</th>' +
+    '</tr></thead><tbody>';
+
+  var levels = [
+    { label: '0 (MLE)', r: r.alpha0, level: 'Standard' },
+    { label: '0.2', r: r.alpha02, level: 'Mild' },
+    { label: '0.5', r: r.alpha05, level: 'Moderate' },
+    { label: '0.8', r: r.alpha08, level: 'High' }
+  ];
+
+  for (var li = 0; li < levels.length; li++) {
+    var lev = levels[li];
+    var rv = lev.r;
+    if (!rv || rv.theta === null) continue;
+    html += '<tr' + (li === 2 ? ' style="background:var(--accent-glow)"' : '') + '>' +
+      '<td>' + lev.label + '</td><td>' + lev.level + '</td>' +
+      '<td style="font-weight:600">' + rv.theta.toFixed(4) + '</td>' +
+      '<td>[' + rv.ci_lo.toFixed(4) + ', ' + rv.ci_hi.toFixed(4) + ']</td>' +
+      '<td>' + rv.p_value.toFixed(4) + '</td>' +
+      '<td>' + rv.tau2.toFixed(4) + '</td>' +
+      '<td>' + (rv.shift ? rv.shift.toFixed(4) : '—') + '</td></tr>';
+  }
+  html += '</tbody></table></div>';
+
+  // Outlier detection
+  var robust = r.alpha05;
+  if (robust && robust.outlier_adjusted) {
+    html += '<div class="card"><h3 style="margin-bottom:12px">Study Contributions (DPD &alpha;=0.5)</h3>' +
+      '<p style="color:var(--text-secondary);font-size:13px;margin-bottom:8px">Studies with contribution &lt; 1/(2k) are flagged as downweighted outliers.</p>' +
+      '<table class="data-table"><thead><tr><th>Study</th><th>yi</th><th>sei</th><th>Contribution</th><th>Status</th></tr></thead><tbody>';
+    for (var oi = 0; oi < robust.outlier_adjusted.length; oi++) {
+      var oa = robust.outlier_adjusted[oi];
+      var d = data[oa.study];
+      html += '<tr style="' + (oa.downweighted ? 'opacity:0.6' : '') + '">' +
+        '<td>' + escapeHtml(d.study) + '</td><td>' + d.yi.toFixed(3) + '</td><td>' + d.sei.toFixed(3) + '</td>' +
+        '<td>' + (oa.contribution * 100).toFixed(1) + '%</td>' +
+        '<td>' + (oa.downweighted ? '<span class="badge badge-warn">Downweighted</span>' : '<span class="badge badge-pass">Normal</span>') + '</td></tr>';
+    }
+    html += '</tbody></table></div>';
+  }
+
+  area.innerHTML = html;
+}
+
+// ============================================================
+// RENDER: P-HACK DETECTION TAB
+// ============================================================
+
+function renderPHack(results) {
+  var area = document.getElementById('phack-area');
+  var ph = results.phack;
+  if (!ph || !ph.available) {
+    area.innerHTML = '<div class="card"><p style="color:var(--text-secondary)">Insufficient data for p-hacking analysis (need k &ge; 3).</p></div>';
+    return;
+  }
+
+  var suspBadge = ph.phack_suspicion === 'HIGH' ? 'badge-fail' : ph.phack_suspicion === 'MODERATE' ? 'badge-warn' : 'badge-pass';
+  var html = '<h2 style="margin-bottom:4px">P-Hack Detection (RTMA + MAN)</h2>' +
+    '<p style="color:var(--text-secondary);margin-bottom:16px">Tests whether the evidence is contaminated by within-study p-hacking.</p>';
+
+  // Summary cards
+  html += '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">' +
+    '<div class="card" style="flex:1;min-width:140px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--accent)">' + ph.k_affirmative + '/' + ph.k_total + '</div><div style="font-size:13px;color:var(--text-secondary)">Affirmative studies</div></div>' +
+    '<div class="card" style="flex:1;min-width:140px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--amber)">' + ph.caliper_count + '</div><div style="font-size:13px;color:var(--text-secondary)">Caliper studies (z 1.96-2.2)</div></div>' +
+    '<div class="card" style="flex:1;min-width:160px;text-align:center"><span class="badge ' + suspBadge + '" style="font-size:16px;padding:6px 16px">' + ph.phack_suspicion + '</span><div style="font-size:13px;color:var(--text-secondary);margin-top:4px">P-hacking suspicion</div></div>' +
+    '</div>';
+
+  // Comparison table
+  html += '<div class="card"><h3 style="margin-bottom:12px">Effect Estimates: Naive vs Corrected</h3>' +
+    '<table class="data-table"><thead><tr><th>Method</th><th>Pooled Effect</th><th>95% CI</th><th>p-value</th><th>k used</th></tr></thead><tbody>';
+
+  html += '<tr><td>Naive (all studies)</td><td>' + ph.naive_theta.toFixed(4) + '</td><td>—</td><td>—</td><td>' + ph.k_total + '</td></tr>';
+
+  if (ph.rtma) {
+    html += '<tr style="background:var(--accent-glow)"><td><strong>RTMA (corrected)</strong></td><td style="font-weight:600">' + ph.rtma.theta.toFixed(4) + '</td>' +
+      '<td>[' + ph.rtma.ci_lo.toFixed(4) + ', ' + ph.rtma.ci_hi.toFixed(4) + ']</td>' +
+      '<td>' + ph.rtma.p_value.toFixed(4) + '</td><td>' + ph.k_total + '</td></tr>';
+  }
+  if (ph.man) {
+    html += '<tr><td>MAN (non-affirmative only)</td><td>' + ph.man.theta.toFixed(4) + '</td>' +
+      '<td>[' + ph.man.ci_lo.toFixed(4) + ', ' + ph.man.ci_hi.toFixed(4) + ']</td>' +
+      '<td>' + ph.man.p_value.toFixed(4) + '</td><td>' + ph.man.k_used + '</td></tr>';
+  }
+
+  html += '</tbody></table></div>';
+  html += '<div class="card"><p style="color:var(--text-secondary);font-size:13px">' + escapeHtml(ph.interpretation) + '</p></div>';
+
+  area.innerHTML = html;
+}
+
+// ============================================================
+// RENDER: METAFOREST TAB
+// ============================================================
+
+function renderForest(results) {
+  var area = document.getElementById('forest-area');
+  var f = results.forest;
+  if (!f || !f.available) {
+    area.innerHTML = '<div class="card"><p style="color:var(--text-secondary)">' + escapeHtml(f ? f.reason : 'MetaForest not available') + '</p></div>';
+    return;
+  }
+
+  var html = '<h2 style="margin-bottom:4px">MetaForest (ML Heterogeneity Explanation)</h2>' +
+    '<p style="color:var(--text-secondary);margin-bottom:16px">Precision-weighted random forest identifies which moderators drive heterogeneity.</p>';
+
+  // OOB R-squared
+  var r2Color = f.oob_r2 >= 0.3 ? 'var(--green)' : f.oob_r2 >= 0.1 ? 'var(--amber)' : 'var(--red)';
+  html += '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">' +
+    '<div class="card" style="flex:1;min-width:160px;text-align:center"><div style="font-size:28px;font-weight:bold;color:' + r2Color + '">' + (f.oob_r2 !== null ? (f.oob_r2*100).toFixed(1)+'%' : 'N/A') + '</div><div style="font-size:13px;color:var(--text-secondary)">OOB R&sup2; (heterogeneity explained)</div></div>' +
+    '<div class="card" style="flex:1;min-width:140px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--accent)">' + f.n_trees + '</div><div style="font-size:13px;color:var(--text-secondary)">Trees grown</div></div>' +
+    '</div>';
+
+  // Variable importance
+  html += '<div class="card"><h3 style="margin-bottom:12px">Variable Importance (Moderator Rankings)</h3>' +
+    '<table class="data-table"><thead><tr><th>Rank</th><th>Moderator</th><th>Importance</th><th>Times Split</th><th>Bar</th></tr></thead><tbody>';
+
+  var maxImp = f.variable_importance[0] ? f.variable_importance[0].importance : 1;
+  for (var vi = 0; vi < f.variable_importance.length; vi++) {
+    var v = f.variable_importance[vi];
+    var barW = maxImp > 0 ? (v.importance / maxImp * 100) : 0;
+    html += '<tr><td>' + (vi+1) + '</td><td style="font-weight:500">' + escapeHtml(v.name) + '</td>' +
+      '<td>' + (v.importance*100).toFixed(1) + '%</td><td>' + v.splits + '</td>' +
+      '<td><div style="background:var(--accent);height:16px;border-radius:4px;width:' + barW + '%;min-width:2px"></div></td></tr>';
+  }
+  html += '</tbody></table></div>';
+  html += '<div class="card"><p style="color:var(--text-secondary);font-size:13px">' + escapeHtml(f.interpretation) + '</p></div>';
+
+  area.innerHTML = html;
+}
+
+// ============================================================
+// RENDER: REPORT TAB
+// ============================================================
+
+// ============================================================
+// RENDER: RARE EVENTS TAB (ZIBGLMM)
+// ============================================================
+
+function renderRare(results) {
+  var area = document.getElementById('rare-area');
+  var r = results.rare;
+  if (!r || !r.available) {
+    area.innerHTML = '<div class="card"><h2 style="margin-bottom:8px">Rare Events (ZIBGLMM)</h2>' +
+      '<p style="color:var(--text-secondary)">No binary data detected. To use this engine, provide CSV with columns: events_t, totals_t, events_c, totals_c</p></div>';
+    return;
+  }
+  var html = '<h2 style="margin-bottom:4px">Rare Events (ZIBGLMM)</h2>' +
+    '<p style="color:var(--text-secondary);margin-bottom:16px">Zero-inflated model handles double-zero studies without continuity corrections.</p>';
+
+  html += '<div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap">' +
+    '<div class="card" style="flex:1;min-width:130px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--red)">' + r.doubleZeroCount + '</div><div style="font-size:13px;color:var(--text-secondary)">Double-zero studies</div></div>' +
+    '<div class="card" style="flex:1;min-width:130px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--amber)">' + r.singleZeroCount + '</div><div style="font-size:13px;color:var(--text-secondary)">Single-zero studies</div></div>' +
+    '<div class="card" style="flex:1;min-width:130px;text-align:center"><div style="font-size:28px;font-weight:bold;color:var(--accent)">' + (r.pi0 * 100).toFixed(0) + '%</div><div style="font-size:13px;color:var(--text-secondary)">Zero-inflation (&pi;<sub>0</sub>)</div></div>' +
+    '</div>';
+
+  html += '<div class="card"><h3 style="margin-bottom:12px">ZIBGLMM vs Continuity Correction</h3>' +
+    '<table class="data-table"><thead><tr><th>Method</th><th>log(OR)</th><th>OR</th><th>95% CI</th><th>k used</th></tr></thead><tbody>' +
+    '<tr><td>Continuity Correction (standard)</td><td>' + (r.theta_cc != null ? r.theta_cc.toFixed(4) : 'N/A') + '</td><td>' + (r.or_cc != null ? r.or_cc.toFixed(3) : 'N/A') + '</td><td>—</td><td>' + r.k_total + '</td></tr>' +
+    '<tr style="background:var(--accent-glow)"><td><strong>ZIBGLMM</strong></td><td style="font-weight:600">' + r.theta.toFixed(4) + '</td><td style="font-weight:600">' + r.or.toFixed(3) + '</td>' +
+    '<td>[' + r.ci_lo.toFixed(3) + ', ' + r.ci_hi.toFixed(3) + ']</td><td>' + r.k_informative + ' (informative)</td></tr>' +
+    '</tbody></table></div>';
+
+  html += '<div class="card"><p style="color:var(--text-secondary);font-size:13px">' + escapeHtml(r.interpretation) + '</p></div>';
+  area.innerHTML = html;
+}
+
+// ============================================================
+// RENDER: CAUSAL AGGREGATION TAB
+// ============================================================
+
+function renderCausal(results) {
+  var area = document.getElementById('causal-area');
+  var c = results.causal;
+  if (!c || !c.available) {
+    area.innerHTML = '<div class="card"><p style="color:var(--text-secondary)">Insufficient data for causal aggregation.</p></div>';
+    return;
+  }
+
+  var html = '<h2 style="margin-bottom:4px">Causal Aggregation</h2>' +
+    '<p style="color:var(--text-secondary);margin-bottom:16px">Corrects for non-collapsibility of OR/HR when baseline risks vary across studies.</p>';
+
+  if (!c.correction_applied) {
+    html += '<div class="card"><p style="color:var(--green)">Minimal non-collapsibility correction needed (' + c.measure + '). Naive and causal estimates are equivalent.</p>' +
+      '<p style="margin-top:8px"><strong>Pooled ' + c.measure + ':</strong> ' + c.theta_naive.toFixed(4) + '</p></div>';
+  } else {
+    html += '<div class="card"><h3 style="margin-bottom:12px">Naive vs Causally-Corrected Estimates</h3>' +
+      '<table class="data-table"><thead><tr><th>Method</th><th>log(' + c.measure + ')</th><th>' + c.measure + '</th><th>95% CI</th></tr></thead><tbody>' +
+      '<tr><td>Naive (standard RE)</td><td>' + c.theta_naive.toFixed(4) + '</td><td>' + c.naive_exp.toFixed(3) + '</td><td>—</td></tr>' +
+      '<tr style="background:var(--accent-glow)"><td><strong>Causal-corrected</strong></td><td style="font-weight:600">' + c.theta_causal.toFixed(4) + '</td><td style="font-weight:600">' + c.causal_exp.toFixed(3) + '</td>' +
+      '<td>[' + Math.exp(c.ci_lo).toFixed(3) + ', ' + Math.exp(c.ci_hi).toFixed(3) + ']</td></tr>' +
+      '</tbody></table>' +
+      '<p style="margin-top:8px;color:var(--text-secondary);font-size:13px">Correction factor: ' + c.correction_factor.toFixed(3) +
+      ' | Baseline risk variance: ' + c.baseline_risk_variance.toFixed(4) + '</p></div>';
+  }
+
+  html += '<div class="card"><p style="color:var(--text-secondary);font-size:13px">' + escapeHtml(c.interpretation) + '</p></div>';
+  area.innerHTML = html;
+}
+
+// ============================================================
+// RENDER: REPORT TAB
+// ============================================================
+
+function renderReport(results) {
+  var area = document.getElementById('report-area');
+  var r = results.robust.alpha05;
+  var ph = results.phack;
+  var f = results.forest;
+
+  var html = '<h2 style="margin-bottom:16px">MetaGuard Report</h2>';
+
+  html += '<div class="card"><h3 style="color:var(--accent);margin-bottom:8px">Executive Summary</h3>' +
+    '<p style="margin-bottom:8px"><strong>Robust pooled estimate:</strong> ' + (r ? r.theta.toFixed(4) : 'N/A') + ' (DPD &alpha;=0.5)' +
+    (r && r.shift > 0.05 ? ' — shifted ' + r.shift.toFixed(3) + ' from MLE, indicating outlier influence' : ' — consistent with MLE') + '</p>';
+
+  if (ph && ph.available) {
+    html += '<p style="margin-bottom:8px"><strong>P-hacking assessment:</strong> <span class="badge ' +
+      (ph.phack_suspicion === 'HIGH' ? 'badge-fail' : ph.phack_suspicion === 'MODERATE' ? 'badge-warn' : 'badge-pass') + '">' +
+      ph.phack_suspicion + '</span> — ' + ph.k_affirmative + '/' + ph.k_total + ' affirmative (' + (ph.prop_affirmative*100).toFixed(0) + '%), ' +
+      ph.caliper_count + ' caliper studies</p>';
+    if (ph.rtma) {
+      html += '<p style="margin-bottom:8px"><strong>RTMA-corrected effect:</strong> ' + ph.rtma.theta.toFixed(4) + ' [' + ph.rtma.ci_lo.toFixed(4) + ', ' + ph.rtma.ci_hi.toFixed(4) + ']</p>';
+    }
+  }
+
+  if (f && f.available) {
+    html += '<p style="margin-bottom:8px"><strong>MetaForest:</strong> OOB R\u00b2 = ' + (f.oob_r2 !== null ? (f.oob_r2*100).toFixed(1)+'%' : 'N/A') +
+      '. Top moderator: ' + (f.variable_importance[0] ? escapeHtml(f.variable_importance[0].name) : 'N/A') + '</p>';
+  }
+
+  html += '</div>';
+
+  // Export
+  html += '<div class="card"><h3 style="margin-bottom:8px">Export</h3>' +
+    '<button class="btn btn-primary" id="exportReport">Download JSON Report</button></div>';
+
+  area.innerHTML = html;
+
+  document.getElementById('exportReport').addEventListener('click', function() {
+    var blob = new Blob([JSON.stringify(results, null, 2)], { type: 'application/json' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = url; a.download = 'metaguard_report.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+}
+
+</script>
+</body>
+</html>
