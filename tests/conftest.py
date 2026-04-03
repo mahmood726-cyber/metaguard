@@ -1,6 +1,5 @@
 """Shared Selenium fixtures for MetaGuard tests."""
 import os, sys, json, pytest
-sys.stdout = __import__('io').TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
 
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
